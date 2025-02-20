@@ -139,17 +139,18 @@ pintos_init (void)
     size_t index = 0;
     while (true)
     {
-      printf ("PKUOS>"); // starts with PKUOS> prompt
+      printf ("PKUOS> "); // starts with PKUOS> prompt
       input_init ();
       memset (buf, 0, 128);
       index = 0;
       while (true) {
         char c = input_getc ();
         if (c == '\r') {
+          // Finsh input
           printf ("\n");
           break;
         } else if (c == 127) {
-          // backspace
+          // backspace, 127 is ASCII code for DEL
           buf[--index] = '\0';
           // e.g. asd|(cursor) -> as|d -> as | -> as|  
           printf ("\b \b"); // move cursor back
@@ -166,10 +167,14 @@ pintos_init (void)
           printf ("%c", c);
         }
       }
+      printf("%s", buf);
       if (!strcmp (buf, "whoami")) {
         printf ("2200013126\n");
       } else if (!strcmp (buf, "exit")) {
         break;
+      } else if (!strlen(buf)) {
+        // A enter will make the buf an empty string
+        continue;
       } else {
         printf ("invalid command\n");
       }
