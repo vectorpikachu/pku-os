@@ -167,7 +167,6 @@ pintos_init (void)
           printf ("%c", c);
         }
       }
-      printf("%s", buf);
       if (!strcmp (buf, "whoami")) {
         printf ("2200013126\n");
       } else if (!strcmp (buf, "exit")) {
