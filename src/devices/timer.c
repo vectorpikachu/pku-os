@@ -183,7 +183,7 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++; // The static variable ticks is incremented here and only here.
-  wake_up_sleep_threads ();
+  thread_wake_up ();
   thread_tick ();
 }
 

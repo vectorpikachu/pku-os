@@ -482,6 +482,17 @@ alloc_frame (struct thread *t, size_t size)
   return t->stack;
 }
 
+/**
+ Compare the priority of two threads. It's a less function for list_max.
+ */
+bool
+thread_priority_compare (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED)
+{
+  const struct thread *a = list_entry (a_, struct thread, elem);
+  const struct thread *b = list_entry (b_, struct thread, elem);
+  return a->priority < b->priority;
+}
+
 /** Chooses and returns the next thread to be scheduled.  Should
    return a thread from the run queue, unless the run queue is
    empty.  (If the running thread can continue running, then it
@@ -492,8 +503,12 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list))
     return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  else {
+    // Lyu: Should return the highest priority thread in the ready list
+    struct list_elem *highest_priority_thread = list_max (&ready_list, thread_priority_compare, NULL);
+    list_remove (highest_priority_thread);
+    return list_entry (highest_priority_thread, struct thread, elem);
+  }
 }
 
 /** Completes a thread switch by activating the new thread's page
@@ -585,7 +600,7 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 /** Check the sleep_threads list and wake up the sleeping threads.  */
 void
-wake_up_sleep_threads (void) 
+thread_wake_up (void) 
 {
   struct list_elem *e;
   ASSERT (intr_get_level () == INTR_OFF);
