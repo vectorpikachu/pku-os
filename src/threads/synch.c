@@ -308,7 +308,12 @@ cond_wait (struct condition *cond, struct lock *lock)
 }
 
 /**
- Function used to compare the priority of the threads in the waiters list of a semaphore.
+ Function used to compare the priority of the threads in the waiters list.
+ That is, a thread waiting for a semaphore <- the semaphore's waiter list
+ only contains threads waiting for the semaphore.
+
+ Even the condition variable's waiters list only contains semaphores, it means
+ actually the threads(which is represented by sema) waiting for the condition variable.
  */
 bool
 semaphore_elem_priority_compare (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED) {
