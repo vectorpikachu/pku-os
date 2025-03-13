@@ -98,6 +98,7 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  initial_thread->sleep_ticks = 0;
 }
 
 /** Starts preemptive thread scheduling by enabling interrupts.
@@ -200,6 +201,10 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+
+  /* Lyu: When a high-priority thread is created, yield to it. */
+  if (thread_current ()->priority < priority)
+    thread_yield ();
 
   return tid;
 }
@@ -331,11 +336,15 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
-/** Sets the current thread's priority to NEW_PRIORITY. */
+/** Sets the current thread's priority to NEW_PRIORITY.
+ ADDITION: After the priority is set, the thread should be immediately
+ sheduled again. Using thread_yield() here.
+ */
 void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  thread_yield ();
 }
 
 /** Returns the current thread's priority. */
@@ -598,7 +607,9 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
-/** Check the sleep_threads list and wake up the sleeping threads.  */
+/** Check the all_list and wake up the sleeping threads.
+  And I find there is a function thread_foreach. But I don't want to change.
+  */
 void
 thread_wake_up (void) 
 {
