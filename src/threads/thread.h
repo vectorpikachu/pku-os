@@ -95,6 +95,13 @@ struct thread
 
     /* I made a mistake. It should not be under the def of magic. */
     int64_t sleep_ticks;                /**< Sleep ticks. */
+   
+    /* To implement priority donation. A thread can hold multiple locks. But can
+      only be blocked by one lock. 
+     */
+    struct list locks;                  /**< List of locks that the thread is holding. */
+    struct lock *waiting_lock;          /**< Lock that the thread is waiting for. */
+    int original_priority;              /**< Original priority. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

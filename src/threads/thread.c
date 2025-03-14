@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "../lib/stdio.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -98,7 +99,6 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-  initial_thread->sleep_ticks = 0;
 }
 
 /** Starts preemptive thread scheduling by enabling interrupts.
@@ -202,7 +202,7 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
-  /* Lyu: When a high-priority thread is created, yield to it. */
+  /* Lyu: When a high-priority thread is created, yield it to CPU. */
   if (thread_current ()->priority < priority)
     thread_yield ();
 
@@ -339,12 +339,24 @@ thread_foreach (thread_action_func *func, void *aux)
 /** Sets the current thread's priority to NEW_PRIORITY.
  ADDITION: After the priority is set, the thread should be immediately
  sheduled again. Using thread_yield() here.
+ ATTENTION: The original priority should be updated as well.
+ And if there is not any locks held by the thread, 
+ the priority should be updated to the new priority. 
+ And if the new priority is higher than the original priority, 
+ the priority should be updated to the new priority. 
+ But in other case(hold locks and new priority is lower than the original priority), 
+ we should not update the priority, 
+ because we don't know whether the priority is being donated to or not, 
+ if we lower the priority, it may cause deadlock.
  */
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
-  thread_yield ();
+  thread_current ()->original_priority = new_priority;
+  if (list_empty (&thread_current ()->locks) || new_priority > thread_current ()->priority) {
+    thread_current ()->priority = new_priority;
+    thread_yield ();
+  }
 }
 
 /** Returns the current thread's priority. */
@@ -472,6 +484,11 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  /* Initialize newly-added fields. */
+  list_init (&t->locks);
+  t->waiting_lock = NULL;
+  t->sleep_ticks = 0;
+  t->original_priority = priority;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

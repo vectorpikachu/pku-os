@@ -4,6 +4,8 @@
 #include <list.h>
 #include <stdbool.h>
 
+#define NESTED_PRI_DONATION 8 /**< The maximum number of nested priority donations. */
+
 /** A counting semaphore. */
 struct semaphore 
   {
@@ -20,6 +22,8 @@ void sema_self_test (void);
 /** Lock. */
 struct lock 
   {
+    int max_priority;        /**< Maximum priority among the threads waiting for the lock. */
+    struct list_elem lock_elem;      /**< List element for locks list in thread. */
     struct thread *holder;      /**< Thread holding lock (for debugging). */
     struct semaphore semaphore; /**< Binary semaphore controlling access. */
   };
