@@ -185,6 +185,21 @@ timer_interrupt (struct intr_frame *args UNUSED)
   ticks++; // The static variable ticks is incremented here and only here.
   thread_wake_up ();
   thread_tick ();
+
+  // When multi-level feedback queue scheduler is enabled.
+  if (thread_mlfqs) {
+    /* each time tick, increment recent_cpu */
+    increment_recent_cpu ();
+    if (ticks % TIMER_FREQ == 0) {
+      /* each second, update load_avg and update recent_cpu for all threads */
+      update_load_avg ();
+      thread_foreach (update_recent_cpu, NULL);
+    }
+    if (ticks % 4 == 0) {
+      /* each fourth tick, update priority for all threads */
+      thread_foreach (update_priority, NULL);
+    }
+  }
 }
 
 

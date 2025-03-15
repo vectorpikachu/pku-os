@@ -202,6 +202,9 @@ lock_priority_compare (const struct list_elem *a_, const struct list_elem *b_, v
    ATTENTION: I implemented priority donation in this function.
    When a thread acquires a lock, it should donate its priority to the holder of the lock.
 
+   ATTENTION: When multi-level feedback queue scheduler is enabled,
+   there should not be any priority donation.
+
    This function may sleep, so it must not be called within an
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
@@ -215,7 +218,7 @@ lock_acquire (struct lock *lock)
 
   /* Priority donation occurs when a thread tries to acquire a lock that is already held by another thread, whose priority is lower than the current thread. This makes current thread getting the lock impossible. Thus we should donate the priority to the holder of the lock.
   */
-  if (lock->holder != NULL) {
+  if (lock->holder != NULL && !thread_mlfqs) {
     thread_current ()->waiting_lock = lock; // The current thread is waiting for the lock.
     struct lock *current_lock = lock; // Current lock. It's for the nested donation.
     /* e.g. Thread A waits Lock L1(held by Thread B), Thread B waits Lock L2(held by Thread C),
@@ -244,7 +247,7 @@ lock_acquire (struct lock *lock)
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
 
-  if (true) {
+  if (!thread_mlfqs) {
     thread_current ()->waiting_lock = NULL;
     lock->max_priority = thread_current ()->priority;
     list_push_back (&thread_current ()->locks, &lock->lock_elem);
@@ -290,7 +293,7 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (true) {
+  if (!thread_mlfqs) {
     list_remove (&lock->lock_elem);
     int max_priority = thread_current ()->original_priority;
     if (!list_empty (&thread_current ()->locks)) {
