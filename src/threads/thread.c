@@ -428,6 +428,14 @@ update_recent_cpu (struct thread *t, void *aux UNUSED)
   }
 }
 
+/** Update the recent_cpu and priority of given threads. */
+void
+update_recent_cpu_and_priority (struct thread *t, void *aux UNUSED)
+{
+  update_recent_cpu (t, NULL);
+  update_priority (t, NULL);
+}
+
 /** load_avg estimates the average number of threads ready to run over the past minute. 
  * It is initialized to 0 at boot and recalculated **once per second** as follows, 
  * where ready_threads is the number of threads that are either **running** 

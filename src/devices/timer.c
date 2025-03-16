@@ -178,7 +178,10 @@ timer_print_stats (void)
   printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
 
-/** Timer interrupt handler. Here we need to check which thread should be waked up. */
+/** Timer interrupt handler. Here we need to check which thread should be waked up.
+ * ATTENTION: Instead of updating priority every four ticks, we should update the priority
+ * when the recent_cpu and nice value changes.
+ */
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
@@ -193,11 +196,11 @@ timer_interrupt (struct intr_frame *args UNUSED)
     if (ticks % TIMER_FREQ == 0) {
       /* each second, update load_avg and update recent_cpu for all threads */
       update_load_avg ();
-      thread_foreach (update_recent_cpu, NULL);
+      thread_foreach (update_recent_cpu_and_priority, NULL);
     }
     if (ticks % 4 == 0) {
       /* each fourth tick, update priority for all threads */
-      thread_foreach (update_priority, NULL);
+      update_priority (thread_current (), NULL);
     }
   }
 }
