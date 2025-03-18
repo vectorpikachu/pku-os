@@ -95,6 +95,7 @@ struct thread
 
     /* I made a mistake. It should not be under the def of magic. */
     int64_t sleep_ticks;                /**< Sleep ticks. */
+    struct list_elem sleepelem;      /**< List element for sleeping. */
    
     /* To implement priority donation. A thread can hold multiple locks. But can
       only be blocked by one lock. 
@@ -164,5 +165,9 @@ int thread_get_load_avg (void);
 void thread_wake_up (void);
 
 bool thread_priority_compare (const struct list_elem *a, const struct list_elem *b, void *aux);
+
+bool thread_priority_compare_greater (const struct list_elem *a, const struct list_elem *b, void *aux);
+
+void thread_sleep(struct thread *t);
 
 #endif /**< threads/thread.h */

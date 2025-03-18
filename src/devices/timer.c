@@ -102,6 +102,7 @@ timer_sleep (int64_t ticks)
   enum intr_level old_level = intr_disable ();
 
   cur->sleep_ticks = ticks;
+  thread_sleep (cur);
   thread_block (); // block the current thread.
 
   intr_set_level (old_level);

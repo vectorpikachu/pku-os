@@ -61,6 +61,7 @@ static unsigned thread_ticks;   /**< # of timer ticks since last yield. */
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
 
+struct list sleep_list;        /**< List of threads sleeping. */
 static int load_avg;            /**< System-wide load average. */
 
 static void kernel_thread (thread_func *, void *aux);
@@ -96,6 +97,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&sleep_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -224,7 +226,6 @@ thread_block (void)
 {
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
-
   thread_current ()->status = THREAD_BLOCKED;
   schedule ();
 }
@@ -246,7 +247,10 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  list_insert_ordered (&ready_list, 
+    &t->elem, 
+    thread_priority_compare_greater, 
+    NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -317,7 +321,10 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered (&ready_list, 
+      &cur->elem, 
+      thread_priority_compare_greater, 
+      NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -630,6 +637,15 @@ thread_priority_compare (const struct list_elem *a_, const struct list_elem *b_,
   return a->priority < b->priority;
 }
 
+/** Greater version of thread_priority_compare. */
+bool
+thread_priority_compare_greater (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED)
+{
+  const struct thread *a = list_entry (a_, struct thread, elem);
+  const struct thread *b = list_entry (b_, struct thread, elem);
+  return a->priority > b->priority;
+}
+
 /** Chooses and returns the next thread to be scheduled.  Should
    return a thread from the run queue, unless the run queue is
    empty.  (If the running thread can continue running, then it
@@ -642,8 +658,7 @@ next_thread_to_run (void)
     return idle_thread;
   else {
     // Lyu: Should return the highest priority thread in the ready list
-    struct list_elem *highest_priority_thread = list_max (&ready_list, thread_priority_compare, NULL);
-    list_remove (highest_priority_thread);
+    struct list_elem *highest_priority_thread = list_pop_front (&ready_list);
     return list_entry (highest_priority_thread, struct thread, elem);
   }
 }
@@ -735,6 +750,12 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
+/** Sleep the thread t, insert it in the sleep_list. */
+void
+thread_sleep (struct thread *t) {
+  list_push_back (&sleep_list, &t->sleepelem);
+} 
+
 /** Check the all_list and wake up the sleeping threads.
   And I find there is a function thread_foreach. But I don't want to change.
   */
@@ -743,12 +764,16 @@ thread_wake_up (void)
 {
   struct list_elem *e;
   ASSERT (intr_get_level () == INTR_OFF);
-  for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)) {
-    struct thread *t = list_entry (e, struct thread, allelem);
+  for (e = list_begin (&sleep_list); e != list_end (&sleep_list); e = list_next (e)) {
+    struct thread *t = list_entry (e, struct thread, sleepelem);
     if (t->status == THREAD_BLOCKED && t->sleep_ticks > 0) {
       t->sleep_ticks--;
       if (t->sleep_ticks == 0) {
+        list_remove (&t->sleepelem);
         thread_unblock (t);
+        if (t->priority > thread_current ()->priority) {
+          intr_yield_on_return ();
+        }
       }
     }
   }
