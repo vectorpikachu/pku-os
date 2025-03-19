@@ -368,11 +368,13 @@ thread_set_priority (int new_priority)
   if (thread_mlfqs) {
     return;
   }
+  enum intr_level old_level = intr_disable ();
   thread_current ()->original_priority = new_priority;
   if (list_empty (&thread_current ()->locks) || new_priority > thread_current ()->priority) {
     thread_current ()->priority = new_priority;
     thread_yield ();
   }
+  intr_set_level (old_level);
 }
 
 /** Each thread also has a priority, between 0 (PRI_MIN) through 63 (PRI_MAX), 
@@ -756,7 +758,7 @@ thread_sleep (struct thread *t) {
   list_push_back (&sleep_list, &t->sleepelem);
 } 
 
-/** Check the all_list and wake up the sleeping threads.
+/** Check the sleep_list and wake up the sleeping threads.
   And I find there is a function thread_foreach. But I don't want to change.
   */
 void
