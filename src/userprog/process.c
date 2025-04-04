@@ -66,10 +66,10 @@ process_execute (const char *file_name)
   }
 
   /* Wait for child process is success. */
-  sema_down (&thread_current ()->sema);
-  if (!thread_current ()->success) {
-    return TID_ERROR;
-  }
+  //sema_down (&thread_current ()->sema);
+  //if (!thread_current ()->success) {
+  //  return TID_ERROR;
+  //}
 
   return tid;
 }
@@ -121,13 +121,15 @@ start_process (void *file_name_)
      */
     push_argument(&if_.esp, argc, argv);
 
+    hex_dump((uintptr_t)if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
+
     /* The child is sueccess. (Let the parent's waiting end.) */
-    thread_current ()->parent->success = true;
-    sema_up (&thread_current ()->parent->sema);
+    // thread_current ()->parent->success = true;
+    // sema_up (&thread_current ()->parent->sema);
   } else {
 
-    thread_current () /* The child. */
-                     ->parent->success = false;
+    //thread_current () /* The child. */
+    //                 ->parent->success = false;
 
     /* If load failed, quit. */
     palloc_free_page (file_name);
@@ -203,6 +205,7 @@ push_argument (void **esp, int argc, int *argv)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  return -1;
   struct list *children = &thread_current ()->children;
   struct list_elem *e;
   struct child_process *child;
