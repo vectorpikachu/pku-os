@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 
 /** States in a thread's life cycle. */
 enum thread_status
@@ -23,6 +24,17 @@ typedef int tid_t;
 #define PRI_MIN 0                       /**< Lowest priority. */
 #define PRI_DEFAULT 31                  /**< Default priority. */
 #define PRI_MAX 63                      /**< Highest priority. */
+
+/** The purpose of this struct is to implement process_wait and process_exec. */
+struct child_process
+ {
+   /* wait finds the child according to tid. */
+   tid_t tid;                    /**< Tid of the child process. */
+   bool child_run;               /**< Whether the child process is run. */
+   struct list_elem child_elem;  /**< List element for child process. */
+   struct semaphore sema;
+   int exit_status;
+ };
 
 /** A kernel thread or user process.
 
@@ -107,6 +119,18 @@ struct thread
     /* Multi-level feedback queue scheduler. */
     int nice;                           /**< Nice value. */
     int64_t recent_cpu;                 /**< Recent CPU. */
+
+    /* Lab 2 multithreaded processes are not supported in Pintos.
+       So a process can be represented by a thread.
+       The parent process will wait for its child process to exit.
+     */
+    int exit_status;                    /**< (Process's) Exit status. */
+    struct list children;               /**< List of children (process). */
+    struct child_process *child;        /**< The child process tha exec forks. */
+    struct thread *parent;              /**< Parent process. */
+    struct semaphore sema;              /**< Semaphore to wait for child process. */
+    bool success;                       /**< Whether the child process is successful. */
+
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

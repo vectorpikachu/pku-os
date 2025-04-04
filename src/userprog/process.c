@@ -65,7 +65,11 @@ process_execute (const char *file_name)
     return tid;
   }
 
-  
+  /* Wait for child process is success. */
+  sema_down (&thread_current ()->sema);
+  if (!thread_current ()->success) {
+    return TID_ERROR;
+  }
 
   return tid;
 }
@@ -117,8 +121,14 @@ start_process (void *file_name_)
      */
     push_argument(&if_.esp, argc, argv);
 
-    
+    /* The child is sueccess. (Let the parent's waiting end.) */
+    thread_current ()->parent->success = true;
+    sema_up (&thread_current ()->parent->sema);
   } else {
+
+    thread_current () /* The child. */
+                     ->parent->success = false;
+
     /* If load failed, quit. */
     palloc_free_page (file_name);
     thread_exit ();
@@ -184,12 +194,41 @@ push_argument (void **esp, int argc, int *argv)
    been successfully called for the given TID, returns -1
    immediately, without waiting.
 
+   Lab 2: Simply find the waiting process,
+   if it is not run, wait until it is run.
+   else, we shouldn't wait for it.
+
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  struct list *children = &thread_current ()->children;
+  struct list_elem *e;
+  struct child_process *child;
+  for (e = list_begin (children); e != list_end (children); 
+       e = list_next (e)) 
+    {
+      child = list_entry (e, struct child_process, child_elem);
+      if (child->tid == child_tid)
+        {
+          if (child->child_run == false)
+            {
+              child->child_run = true; /* wait until it is run. */
+              sema_down (&child->sema);
+              break;
+            }
+          else return -1;
+        }
+      child = list_next (child);
+    }
+  if (e == list_end (children))
+    {
+      /* We cannot find this child. */
+      return -1;
+    }
+  list_remove (e); /* The child is finished. */
+  return child->exit_status;
 }
 
 /** Free the current process's resources. */
