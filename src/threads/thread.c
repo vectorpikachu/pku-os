@@ -13,6 +13,7 @@
 #include "threads/vaddr.h"
 #include "../lib/stdio.h"
 #include "fixed-point.h"
+#include "threads/malloc.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -190,6 +191,14 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+  /* Lab 2: Initialize for child process. */
+  t->child = malloc (sizeof(struct child_process));
+  t->child->tid = tid;
+  sema_init (&t->child->sema, 0);
+  list_push_back (&thread_current ()->children, &t->child->child_elem);
+  t->child->exit_status = UINT32_MAX;
+  t->child->child_run = false; /* Haven't been run yet. */
+
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -299,10 +308,14 @@ thread_exit (void)
   process_exit ();
 #endif
 
+  intr_disable ();
+
+  thread_current ()->child->exit_status = thread_current ()->exit_status;
+  sema_up (&thread_current ()->child->sema);
+
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
-  intr_disable ();
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();

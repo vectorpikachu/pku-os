@@ -126,7 +126,7 @@ struct thread
      */
     int exit_status;                    /**< (Process's) Exit status. */
     struct list children;               /**< List of children (process). */
-    struct child_process *child;        /**< The child process tha exec forks. */
+    struct child_process *child;        /**< The child process that it represents. */
     struct thread *parent;              /**< Parent process. */
     struct semaphore sema;              /**< Semaphore to wait for child process. */
     bool success;                       /**< Whether the child process is successful. */
