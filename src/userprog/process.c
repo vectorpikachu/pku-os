@@ -104,12 +104,14 @@ start_process (void *file_name_)
       memcpy (if_.esp, token, strlen (token) + 1);
       argv[argc++] = (int) if_.esp;
     }
+    hex_dump ((uintptr_t) if_.esp, if_.esp, PHYS_BASE-if_.esp, true);
     /* After that, push arguments.
        The pushed arguments are
        pointers pointing to the pre-stored
        string literals (representing the args)
      */
     push_argument(&if_.esp, argc, argv);
+    hex_dump ((uintptr_t) if_.esp, if_.esp, PHYS_BASE-if_.esp, true);
   } else {
     /* If load failed, quit. */
     palloc_free_page (file_name);
@@ -180,6 +182,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  while (1);
   return -1;
 }
 
