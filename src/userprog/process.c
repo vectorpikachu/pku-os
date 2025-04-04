@@ -20,11 +20,17 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+void push_argument (void **esp, int argc, int *argv);
 
 /** Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
-   thread id, or TID_ERROR if the thread cannot be created. */
+   thread id, or TID_ERROR if the thread cannot be created. 
+
+   Lab 2 - Task 2: Add argument passing support.
+   thread_create()'s FUNCTION's argument is passed by the last
+   argument void * aux.
+   */
 tid_t
 process_execute (const char *file_name) 
 {
@@ -33,13 +39,26 @@ process_execute (const char *file_name)
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
+  /* you could limit the arguments to those 
+     that will fit in a single page (4 kB). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  /* Lab 2 - Task 2: Split the file_name to get the real process name. */
+  char *fn_real = palloc_get_page (0);
+  if (fn_real == NULL)
+    return TID_ERROR;
+  strlcpy (fn_real, file_name, PGSIZE);
+  char *save_ptr;
+  fn_real = strtok_r (fn_real, " ", &save_ptr);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (fn_real, PRI_DEFAULT, start_process, fn_copy);
+
+  palloc_free_page (fn_real);
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -54,17 +73,48 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
+  /* Lab 2 - Task 2: Make a copy so we can split the file_name. */
+  char *fn_copy = palloc_get_page (0);
+  strlcpy (fn_copy, file_name, PGSIZE);
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
 
-  /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
+  char *token, *save_ptr;
+  file_name = strtok_r (file_name, " ", &save_ptr);
+
+  success = load (file_name, &if_.eip, &if_.esp);
+  /* Stack pointer is in esp. */
+
+  /* If load succeeds, push the argument. */
+  if (success) {
+    int argc;
+    /* The argument's type is char *.
+       Consider the `char *` as `int` for convenience.
+       Split the tokens.
+     */
+    int argv[64];
+    for (token = strtok_r (fn_copy, " ", &save_ptr); token != NULL; 
+         token = strtok_r (NULL, " ", &save_ptr)) {
+      if_.esp -= (strlen (token) + 1);
+      /* Store the string literals in the stack. */
+      memcpy (if_.esp, token, strlen (token) + 1);
+      argv[argc++] = (int) if_.esp;
+    }
+    /* After that, push arguments.
+       The pushed arguments are
+       pointers pointing to the pre-stored
+       string literals (representing the args)
+     */
+    push_argument(&if_.esp, argc, argv);
+  } else {
+    /* If load failed, quit. */
+    palloc_free_page (file_name);
     thread_exit ();
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -75,6 +125,48 @@ start_process (void *file_name_)
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
+
+/** Push arguments ('s address) to the stack.
+  */
+ void
+ push_argument (void **esp, int argc, int *argv)
+ {
+    /* Word-aligned accesses are faster than unaligned accesses, 
+      so for best performance, round the stack pointer 
+      down to a multiple of 4 before the first push.
+      0xfffffffc's last two bits are 0s, 
+      which eliminates esp's last two bits.
+    */
+    *esp = (int) *esp & 0xfffffffc;
+ 
+    /* Then, push the address of each string 
+      plus a null pointer sentinel, 
+      on the stack, in right-to-left order. */
+ 
+    /* The *null pointer sentinel* ensures 
+      that argv[argc] is a null pointer, 
+      as required by the C standard. */
+    *esp -= 4;
+    *(int *) *esp = 0;  /* Turn *esp to a int * pointer. */
+    /* Push the address of each string */
+    for (int i = argc - 1; i >= 0; i--) {
+      *esp -= 4;
+      *(int *) *esp = argv[i];
+    }
+ 
+    /* Then, push argv (the address of argv[0]) 
+      and argc, in that order. */
+    *esp -= 4;
+    *(int *) *esp = (int) *esp + 4;
+ 
+    *esp -= 4;
+    *(int *) *esp = argc;
+ 
+    /* Finally, push a fake "return address" */
+    *esp -= 4;
+    *(int *) *esp = 0;
+ }
+ 
 
 /** Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
