@@ -91,7 +91,7 @@ start_process (void *file_name_)
 
   /* If load succeeds, push the argument. */
   if (success) {
-    int argc;
+    int argc = 0;
     /* The argument's type is char *.
        Consider the `char *` as `int` for convenience.
        Split the tokens.
@@ -193,6 +193,7 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;

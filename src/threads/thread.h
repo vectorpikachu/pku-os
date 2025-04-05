@@ -94,6 +94,10 @@ struct thread
     struct list_elem elem;              /**< List element. */
 
     /* Lab 2 */
+    /* By defining the process outside the thread, 
+       it will be more understandable and easy to expand.
+       But the important thing is: Pintos chooses to directly use
+       **thread** as process, without using `process' abstraction. */
     int exit_status;
 
 #ifdef USERPROG
