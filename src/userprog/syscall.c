@@ -3,11 +3,15 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "devices/shutdown.h"
 
 #define SYSCALL_NUM 30
 
 /* syscalls array */
 static void (*syscalls[SYSCALL_NUM])(struct intr_frame *);
+
+
+int32_t get_argument (int arg_index, struct intr_frame *f);
 
 static void syscall_handler (struct intr_frame *);
 static void sys_halt (struct intr_frame *);
@@ -29,17 +33,18 @@ void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-  syscalls[SYS_HALT] = sys_halt;
-  syscalls[SYS_EXIT] = sys_exit;
+  syscalls[SYS_HALT] = &sys_halt;
+  syscalls[SYS_EXIT] = &sys_exit;
 
-  syscalls[SYS_WRITE] = sys_write;
+  syscalls[SYS_WRITE] = &sys_write;
 }
 
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  printf ("system call!\n");
-  thread_exit ();
+  // printf ("system call!\n");
+  int syscall_num = get_argument (0, f);
+  syscalls[syscall_num] (f);
 }
 
 /** Terminates Pintos by calling shutdown_power_off() */
