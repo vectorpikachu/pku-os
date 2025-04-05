@@ -59,8 +59,17 @@ process_execute (const char *file_name)
 
   palloc_free_page (fn_real);
 
-  if (tid == TID_ERROR)
+  if (tid == TID_ERROR) {
     palloc_free_page (fn_copy); 
+    return tid;
+  }
+
+  /* Parent waiting for child. */
+  sema_down (&thread_current ()->sema);
+  if (!thread_current ()->child_exit) {
+    return TID_ERROR;
+  }
+
   return tid;
 }
 
@@ -112,7 +121,17 @@ start_process (void *file_name_)
      */
     push_argument(&if_.esp, argc, argv);
     hex_dump ((uintptr_t) if_.esp, if_.esp, PHYS_BASE-if_.esp, true);
+
+    /* Inform the parent. */
+    thread_current ()->parent->child_exit = true;
+    sema_up (&thread_current ()->parent->sema);
+
   } else {
+
+    /* Inform the parent. */
+    thread_current ()->parent->child_exit = false;
+    sema_up (&thread_current ()->parent->sema);
+
     /* If load failed, quit. */
     palloc_free_page (file_name);
     thread_exit ();
@@ -182,8 +201,29 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  while (1);
-  return -1;
+  struct list_elem *e;
+  struct list *children = &thread_current ()->children;
+  struct child_process *child = NULL;
+
+  for (e = list_begin (children); e != list_end (children); 
+       e = list_next (e)) {
+    child = list_entry (e, struct child_process, child_elem);
+    if (child->tid == child_tid) {
+      if (!child->is_exited) {
+        /* Wait for the child to exit. */
+        child->is_exited = true;
+        sema_down (&child->sema);
+        break; 
+      } else {
+        return -1;
+      }
+    }
+  }
+  if (e == list_end (children)) {
+    return -1; /* Child not found. */
+  }
+  list_remove (e); /* Remove the child from the list. */
+  return child->exit_status; /* Return the child's exit status. */
 }
 
 /** Free the current process's resources. */

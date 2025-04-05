@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 
 /** States in a thread's life cycle. */
 enum thread_status
@@ -23,6 +24,15 @@ typedef int tid_t;
 #define PRI_MIN 0                       /**< Lowest priority. */
 #define PRI_DEFAULT 31                  /**< Default priority. */
 #define PRI_MAX 63                      /**< Highest priority. */
+
+struct child_process
+  {
+    tid_t tid;                          /**< Child thread id. */
+    struct list_elem child_elem;        /**< List element. */
+    struct semaphore sema;              /**< Semaphore for synchronization. */
+    int exit_status;                    /**< Exit status of the child process. */
+    bool is_exited;                    /**< Indicates if the child has exited. */
+  };
 
 /** A kernel thread or user process.
 
@@ -99,6 +109,14 @@ struct thread
        But the important thing is: Pintos chooses to directly use
        **thread** as process, without using `process' abstraction. */
     int exit_status;
+    struct list children;              /**< List of child processes. */
+    struct thread *parent;             /**< Parent process. */
+    struct semaphore sema;             /**< Blocking parent. */
+    bool child_exit;                   /**< Is the child process exited? */
+    struct child_process *child;       /**< Child process structure. */
+    /* The member `child' is used to store current thread's
+       process structure. It will be initialized in the thread_create().
+     */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

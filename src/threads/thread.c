@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -183,6 +184,14 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+  /* Lab 2: Intialize this (child) process's structure. */
+  t->child = malloc (sizeof (struct child_process));
+  t->child->tid = tid;
+  sema_init (&t->child->sema, 0);
+  list_push_back (&thread_current ()->children, &t->child->child_elem);
+  t->child->is_exited = false;
+  t->child->exit_status = -1;
+
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -290,6 +299,11 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
+
+  /* Lab 2: Thread_exit is now actually exiting process. */
+  thread_current ()->child->exit_status = thread_current ()->exit_status;
+  sema_up (&thread_current ()->child->sema);
+
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
@@ -463,6 +477,20 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+  /* Lab 2: Initialize a (parent) process. */
+  list_init (&t->children);
+
+  if (t == initial_thread) {
+    t->parent = NULL; /* It is parent process. */
+  }
+  else {
+    t->parent = thread_current (); /* It is child process. */
+  }
+
+  sema_init (&t->sema, 0);
+  t->exit_status = -1;
+  t->child_exit = false;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
