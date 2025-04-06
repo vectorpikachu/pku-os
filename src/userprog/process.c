@@ -59,6 +59,7 @@ process_execute (const char *file_name)
 
   palloc_free_page (fn_real);
 
+  /* Failed to create a child, Parent should free the copy */
   if (tid == TID_ERROR) {
     palloc_free_page (fn_copy); 
     return tid;
@@ -362,8 +363,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
-    }
-  
+    }  
   /** Deny writes to executables. */
   file_deny_write (file);
   t->file_exec = file; /* Save the executable file. */

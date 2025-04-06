@@ -31,7 +31,7 @@ struct child_process
     struct list_elem child_elem;        /**< List element. */
     struct semaphore sema;              /**< Semaphore for synchronization. */
     int exit_status;                    /**< Exit status of the child process. */
-    bool is_exited;                    /**< Indicates if the child has exited. */
+    bool is_exited;                     /**< Indicates if the child has exited. */
   };
 
 struct process_file

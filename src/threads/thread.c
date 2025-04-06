@@ -64,6 +64,8 @@ static unsigned thread_ticks;   /**< # of timer ticks since last yield. */
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
 
+#define MAX_PROCESS 32
+
 static void kernel_thread (thread_func *, void *aux);
 
 static void idle (void *aux UNUSED);
@@ -196,6 +198,11 @@ thread_create (const char *name, int priority,
   tid_t tid;
 
   ASSERT (function != NULL);
+
+  size_t live_process = list_size (&all_list);
+  if (live_process >= MAX_PROCESS) {
+    return TID_ERROR; /* Max process limit reached. */
+  }
 
   /* Allocate thread. */
   t = palloc_get_page (PAL_ZERO);
