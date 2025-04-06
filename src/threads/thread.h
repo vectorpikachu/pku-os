@@ -131,6 +131,7 @@ struct thread
       Every time we open a file, we will
       increase the fd.
    */
+  struct file *file_exec;            /**< Executable file. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

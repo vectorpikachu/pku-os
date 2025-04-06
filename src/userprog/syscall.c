@@ -345,7 +345,6 @@ sys_tell (struct intr_frame *f)
 }
 
 
-
 /** Close System Call. */
 static void
 sys_close (struct intr_frame *f) 

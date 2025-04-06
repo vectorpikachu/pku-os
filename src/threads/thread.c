@@ -12,6 +12,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
+#include "filesys/file.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -325,10 +326,7 @@ thread_exit (void)
   thread_current ()->child->exit_status = thread_current ()->exit_status;
   sema_up (&thread_current ()->child->sema);
 
-  /* Free the process's resources */
-  list_remove (&thread_current ()->child->child_elem);
-  free (thread_current ()->child);
-  thread_current ()->child = NULL;
+  file_close (thread_current ()->file_exec);
 
   /* Close all opened files. */
   struct list *file_list = &thread_current ()->file_list;
@@ -533,6 +531,8 @@ init_thread (struct thread *t, const char *name, int priority)
 
   list_init (&t->file_list);
   t->fd = 2; /* File descriptors start from 2. */
+
+  t->file_exec = NULL; /* Executable file. */
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
