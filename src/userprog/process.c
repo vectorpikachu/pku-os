@@ -356,6 +356,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+  acquire_file_lock ();
   file = filesys_open (file_name);
   if (file == NULL) 
     {
@@ -450,7 +451,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  /* Cannot close file here. -> will make executable writable. */
+  release_file_lock ();
   return success;
 }
 

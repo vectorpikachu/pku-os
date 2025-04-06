@@ -182,9 +182,7 @@ sys_exec (struct intr_frame *f)
 {
   const char *cmd_line = (const char *) get_argument (1, f);
   check_valid_pointer (cmd_line);
-  acquire_file_lock ();
   f->eax = process_execute (cmd_line);
-  release_file_lock ();
 }
 
 /** Waits for a child process pid and retrieves the child's exit status.
