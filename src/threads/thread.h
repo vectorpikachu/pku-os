@@ -34,6 +34,13 @@ struct child_process
     bool is_exited;                    /**< Indicates if the child has exited. */
   };
 
+struct process_file
+  {
+    int fd;                             /**< File descriptor. */
+    struct file *file;                  /**< Pointer to the file. */
+    struct list_elem file_elem;              /**< List element. */
+  };
+
 /** A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -118,6 +125,13 @@ struct thread
        process structure. It will be initialized in the thread_create().
      */
 
+   struct list file_list;             /**< List of opened files. */
+   int fd;                            /**< File descriptor. */
+   /* The fd will record current fd. 
+      Every time we open a file, we will
+      increase the fd.
+   */
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /**< Page directory. */
@@ -131,6 +145,9 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
+
+void acquire_file_lock (void);
+void release_file_lock (void);
 
 void thread_init (void);
 void thread_start (void);

@@ -38,6 +38,9 @@ static struct thread *initial_thread;
 /** Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
+/** File lock */
+static struct lock file_lock;
+
 /** Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
   {
@@ -71,6 +74,23 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+void acquire_file_lock (void);
+void release_file_lock (void);
+
+/** Acquire file lock. */
+void
+acquire_file_lock (void) 
+{
+  lock_acquire (&file_lock);
+}
+
+
+/** Release file lock. */
+void
+release_file_lock (void) 
+{
+  lock_release (&file_lock);
+}
 
 /** Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -91,6 +111,7 @@ thread_init (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
+  lock_init (&file_lock); /* Init file lock. */
   list_init (&ready_list);
   list_init (&all_list);
 
@@ -304,6 +325,24 @@ thread_exit (void)
   thread_current ()->child->exit_status = thread_current ()->exit_status;
   sema_up (&thread_current ()->child->sema);
 
+  /* Free the process's resources */
+  list_remove (&thread_current ()->child->child_elem);
+  free (thread_current ()->child);
+  thread_current ()->child = NULL;
+
+  /* Close all opened files. */
+  struct list *file_list = &thread_current ()->file_list;
+  struct list_elem *e;
+  for (e = list_begin (file_list); e != list_end (file_list); 
+       e = list_next (e)) {
+    struct process_file *pf = list_entry (e, struct process_file, file_elem);
+    acquire_file_lock ();
+    file_close (pf->file);
+    release_file_lock ();
+    list_remove (e);
+    free (pf);
+  }
+
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
@@ -491,6 +530,9 @@ init_thread (struct thread *t, const char *name, int priority)
   sema_init (&t->sema, 0);
   t->exit_status = -1;
   t->child_exit = false;
+
+  list_init (&t->file_list);
+  t->fd = 2; /* File descriptors start from 2. */
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

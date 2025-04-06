@@ -113,14 +113,12 @@ start_process (void *file_name_)
       memcpy (if_.esp, token, strlen (token) + 1);
       argv[argc++] = (int) if_.esp;
     }
-    hex_dump ((uintptr_t) if_.esp, if_.esp, PHYS_BASE-if_.esp, true);
     /* After that, push arguments.
        The pushed arguments are
        pointers pointing to the pre-stored
        string literals (representing the args)
      */
     push_argument(&if_.esp, argc, argv);
-    hex_dump ((uintptr_t) if_.esp, if_.esp, PHYS_BASE-if_.esp, true);
 
     /* Inform the parent. */
     thread_current ()->parent->child_exit = true;
