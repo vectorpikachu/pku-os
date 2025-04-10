@@ -742,7 +742,11 @@ next_thread_to_run (void)
   else {
     // Lyu: Should return the highest priority thread in the ready list
     struct list_elem *highest_priority_thread = list_pop_front (&ready_list);
-    list_remove (highest_priority_thread);
+    struct thread *t = list_entry (highest_priority_thread, struct thread, elem);
+    if (!list_empty (&ready_list) && strcmp (t->name, "idle") == 0) {
+      struct thread *next = list_entry (list_pop_front (&ready_list), struct thread, elem);
+      return next;
+    }
     return list_entry (highest_priority_thread, struct thread, elem);
   }
 }
