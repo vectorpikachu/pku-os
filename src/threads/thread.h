@@ -25,6 +25,8 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /**< Default priority. */
 #define PRI_MAX 63                      /**< Highest priority. */
 
+bool schedule_started;
+
 struct child_process
   {
     tid_t tid;                          /**< Child thread id. */
@@ -125,17 +127,17 @@ struct thread
        process structure. It will be initialized in the thread_create().
      */
 
-   struct list file_list;             /**< List of opened files. */
-   int fd;                            /**< File descriptor. */
-   /* The fd will record current fd. 
-      Every time we open a file, we will
-      increase the fd.
-   */
-  struct file *file_exec;            /**< Executable file. */
+    struct list file_list;             /**< List of opened files. */
+    int fd;                            /**< File descriptor. */
+    /* The fd will record current fd. 
+        Every time we open a file, we will
+        increase the fd.
+    */
+    struct file *file_exec;            /**< Executable file. */
 
     /* I made a mistake. It should not be under the def of magic. */
-    int64_t sleep_ticks;                /**< Sleep ticks. */
-    struct list_elem sleepelem;      /**< List element for sleeping. */
+    int64_t sleep_ticks;              /**< Sleep ticks. */
+    struct list_elem sleepelem;       /**< List element for sleeping. */
    
     /* To implement priority donation. A thread can hold multiple locks. But can
       only be blocked by one lock. 
@@ -147,7 +149,6 @@ struct thread
     /* Multi-level feedback queue scheduler. */
     int nice;                           /**< Nice value. */
     int64_t recent_cpu;                 /**< Recent CPU. */
-
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /**< Page directory. */

@@ -115,15 +115,25 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
+  struct list_elem *t = NULL;
   if (!list_empty (&sema->waiters)) {
-    struct list_elem *t = list_max (&sema->waiters, thread_priority_compare, NULL);
+    t = list_max (&sema->waiters, thread_priority_compare, NULL);
     // The compare function is defined in thread.c
     list_remove (t);
     thread_unblock (list_entry (t, struct thread, elem));
   }
   sema->value++;
+  
+  if (t != NULL && 
+      list_entry (t, struct thread, elem)->priority > thread_current ()->priority) {
+    if (!intr_context()) {
+      thread_yield();
+    } else {
+      intr_yield_on_return();
+    }
+  }
+  
   intr_set_level (old_level);
-  thread_yield (); // Lyu: After a thread is unblocked, yield to the highest priority thread.
 }
 
 static void sema_test_helper (void *sema_);
@@ -308,6 +318,10 @@ lock_release (struct lock *lock)
 
   lock->holder = NULL;
   sema_up (&lock->semaphore);
+  if (!thread_mlfqs && schedule_started) {
+    /* The scheduler should be started. */
+    thread_yield ();
+  }
 }
 
 /** Returns true if the current thread holds LOCK, false

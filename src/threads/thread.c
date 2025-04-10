@@ -13,7 +13,6 @@
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 #include "filesys/file.h"
-#include "../lib/stdio.h"
 #include "fixed-point.h"
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -43,6 +42,8 @@ static struct lock tid_lock;
 
 /** File lock */
 static struct lock file_lock;
+
+bool schedule_started;
 
 /** Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
@@ -124,6 +125,8 @@ thread_init (void)
   list_init (&all_list);
   list_init (&sleep_list);
 
+  schedule_started = false;
+
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
@@ -142,6 +145,8 @@ thread_start (void)
   thread_create ("idle", PRI_MIN, idle, &idle_started);
 
   load_avg = 0; // Lyu: Initialize the load_avg to 0.
+
+  schedule_started = true;
 
   /* Start preemptive thread scheduling. */
   intr_enable ();
@@ -346,28 +351,19 @@ thread_exit (void)
   thread_current ()->child->exit_status = thread_current ()->exit_status;
   sema_up (&thread_current ()->child->sema);
 
-  struct list *children = &thread_current ()->children;
-  struct list_elem *e;
-  for (e = list_begin (children); e != list_end (children); 
-       e = list_next (e)) {
-    struct child_process *child = list_entry (e, struct child_process, child_elem);
-    list_remove (e);
-    free (child);
-  }
-
   file_close (thread_current ()->file_exec);
 
   /* Close all opened files. */
   struct list *file_list = &thread_current ()->file_list;
+  struct list_elem *e;
+  acquire_file_lock ();
   for (e = list_begin (file_list); e != list_end (file_list); 
-       e = list_next (e)) {
+       e = list_remove (e)) {
     struct process_file *pf = list_entry (e, struct process_file, file_elem);
-    acquire_file_lock ();
     file_close (pf->file);
-    release_file_lock ();
-    list_remove (e);
     free (pf);
   }
+  release_file_lock ();
 
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
@@ -746,6 +742,7 @@ next_thread_to_run (void)
   else {
     // Lyu: Should return the highest priority thread in the ready list
     struct list_elem *highest_priority_thread = list_pop_front (&ready_list);
+    list_remove (highest_priority_thread);
     return list_entry (highest_priority_thread, struct thread, elem);
   }
 }
