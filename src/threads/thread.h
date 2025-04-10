@@ -133,6 +133,21 @@ struct thread
    */
   struct file *file_exec;            /**< Executable file. */
 
+    /* I made a mistake. It should not be under the def of magic. */
+    int64_t sleep_ticks;                /**< Sleep ticks. */
+    struct list_elem sleepelem;      /**< List element for sleeping. */
+   
+    /* To implement priority donation. A thread can hold multiple locks. But can
+      only be blocked by one lock. 
+     */
+    struct list locks;                  /**< List of locks that the thread is holding. */
+    struct lock *waiting_lock;          /**< Lock that the thread is waiting for. */
+    int original_priority;              /**< Original priority. */
+
+    /* Multi-level feedback queue scheduler. */
+    int nice;                           /**< Nice value. */
+    int64_t recent_cpu;                 /**< Recent CPU. */
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /**< Page directory. */
@@ -176,9 +191,26 @@ void thread_foreach (thread_action_func *, void *);
 int thread_get_priority (void);
 void thread_set_priority (int);
 
+
+int get_ready (void);
+void update_priority (struct thread *t, void *aux UNUSED);
+void increment_recent_cpu (void);
+void update_recent_cpu (struct thread *t, void *aux UNUSED);
+void update_load_avg (void);
+void update_recent_cpu_and_priority (struct thread *t, void *aux UNUSED);
+
+
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+void thread_wake_up (void);
+
+bool thread_priority_compare (const struct list_elem *a, const struct list_elem *b, void *aux);
+
+bool thread_priority_compare_greater (const struct list_elem *a, const struct list_elem *b, void *aux);
+
+void thread_sleep(struct thread *t);
 
 #endif /**< threads/thread.h */

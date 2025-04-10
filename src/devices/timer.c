@@ -7,6 +7,7 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "threads/malloc.h" // import for malloc
   
 /** See [8254] for hardware details of the 8254 timer chip. */
 
@@ -85,15 +86,26 @@ timer_elapsed (int64_t then)
 }
 
 /** Sleeps for approximately TICKS timer ticks.  Interrupts must
-   be turned on. */
+   be turned on.
+   REFACTOR: Let the current thread block for TICKS ticks.
+ */
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
+  if (ticks <= 0) return;
+  // negative ticks means: Only requirement is that it not crash.
+  // 0 ticks means: The thread should return immediately.
 
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+
+  struct thread *cur = thread_current ();
+  enum intr_level old_level = intr_disable ();
+
+  cur->sleep_ticks = ticks;
+  thread_sleep (cur);
+  thread_block (); // block the current thread.
+
+  intr_set_level (old_level);
 }
 
 /** Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -159,6 +171,7 @@ timer_ndelay (int64_t ns)
   real_time_delay (ns, 1000 * 1000 * 1000);
 }
 
+
 /** Prints timer statistics. */
 void
 timer_print_stats (void) 
@@ -166,13 +179,34 @@ timer_print_stats (void)
   printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
 
-/** Timer interrupt handler. */
+/** Timer interrupt handler. Here we need to check which thread should be waked up.
+ * ATTENTION: Instead of updating priority every four ticks, we should update the priority
+ * when the recent_cpu and nice value changes.
+ */
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
-  ticks++;
+  ticks++; // The static variable ticks is incremented here and only here.
+  thread_wake_up ();
   thread_tick ();
+
+  // When multi-level feedback queue scheduler is enabled.
+  if (thread_mlfqs) {
+    /* each time tick, increment recent_cpu */
+    increment_recent_cpu ();
+    if (ticks % TIMER_FREQ == 0) {
+      /* each second, update load_avg and update recent_cpu for all threads */
+      update_load_avg ();
+      thread_foreach (update_recent_cpu_and_priority, NULL);
+    }
+    if (ticks % 4 == 0) {
+      /* each fourth tick, update priority for all threads */
+      update_priority (thread_current (), NULL);
+    }
+  }
 }
+
+
 
 /** Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */
