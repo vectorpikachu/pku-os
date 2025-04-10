@@ -346,7 +346,6 @@ thread_exit (void)
 
   /* Close all opened files. */
   struct list *file_list = &thread_current ()->file_list;
-  // struct list_elem *e;
   for (e = list_begin (file_list); e != list_end (file_list); 
        e = list_next (e)) {
     struct process_file *pf = list_entry (e, struct process_file, file_elem);
