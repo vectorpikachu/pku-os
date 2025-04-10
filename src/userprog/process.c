@@ -132,9 +132,9 @@ start_process (void *file_name_)
     sema_up (&thread_current ()->parent->sema);
 
     /* If load failed, quit. */
-    palloc_free_page (file_name);
     thread_exit ();
   }
+  palloc_free_page (file_name);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -222,7 +222,9 @@ process_wait (tid_t child_tid UNUSED)
     return -1; /* Child not found. */
   }
   list_remove (e); /* Remove the child from the list. */
-  return child->exit_status; /* Return the child's exit status. */
+  int exit_status = child->exit_status;
+  free (child);
+  return exit_status; /* Return the child's exit status. */
 }
 
 /** Free the current process's resources. */
