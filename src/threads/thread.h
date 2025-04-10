@@ -38,7 +38,7 @@ struct process_file
   {
     int fd;                             /**< File descriptor. */
     struct file *file;                  /**< Pointer to the file. */
-    struct list_elem file_elem;              /**< List element. */
+    struct list_elem file_elem;         /**< List element. */
   };
 
 /** A kernel thread or user process.

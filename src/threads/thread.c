@@ -333,11 +333,20 @@ thread_exit (void)
   thread_current ()->child->exit_status = thread_current ()->exit_status;
   sema_up (&thread_current ()->child->sema);
 
+  struct list *children = &thread_current ()->children;
+  struct list_elem *e;
+  for (e = list_begin (children); e != list_end (children); 
+       e = list_next (e)) {
+    struct child_process *child = list_entry (e, struct child_process, child_elem);
+    list_remove (e);
+    free (child);
+  }
+
   file_close (thread_current ()->file_exec);
 
   /* Close all opened files. */
   struct list *file_list = &thread_current ()->file_list;
-  struct list_elem *e;
+  // struct list_elem *e;
   for (e = list_begin (file_list); e != list_end (file_list); 
        e = list_next (e)) {
     struct process_file *pf = list_entry (e, struct process_file, file_elem);
