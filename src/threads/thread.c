@@ -365,6 +365,14 @@ thread_exit (void)
   }
   release_file_lock ();
 
+  struct list *children = &thread_current ()->children;
+  /* Free all child_process entries we allocated (if we're the parent). */
+  while (!list_empty (children)) {
+    e = list_pop_front (children);
+    struct child_process *cp = list_entry (e, struct child_process, child_elem);
+    free (cp);
+  }
+
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
