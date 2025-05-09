@@ -31,6 +31,9 @@
 #else
 #include "tests/threads/tests.h"
 #endif
+#ifdef VM
+#include "vm/frame.h"
+#endif
 #ifdef FILESYS
 #include "devices/block.h"
 #include "devices/ide.h"
@@ -98,6 +101,11 @@ pintos_init (void)
   palloc_init (user_page_limit);
   malloc_init ();
   paging_init ();
+
+  /* Initialize the frame table. */
+#ifdef VM
+  frame_init ();
+#endif
 
   /* Segmentation. */
 #ifdef USERPROG
