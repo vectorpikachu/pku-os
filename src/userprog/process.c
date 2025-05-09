@@ -18,6 +18,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "vm/frame.h"
+#include "vm/page.h"
 
 /** This is to use the frame table in process.c
     Hence we haven't debugged Lab 2 yet. I do not modify
@@ -262,6 +263,10 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+#ifdef VM
+    sup_page_table_destroy (cur->sup_pt);
+    cur->sup_pt = NULL;
+#endif
 }
 
 /** Sets up the CPU for running user code in the current
@@ -365,6 +370,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
+  /** Allocate supplemental page table. */
+#ifdef VM
+  t->sup_pt = sup_page_table_create ();
+#endif
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
@@ -611,6 +620,20 @@ install_page (void *upage, void *kpage, bool writable)
 
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
-  return (pagedir_get_page (t->pagedir, upage) == NULL
+  bool is_succeed = (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+
+  /** The reason of simply adding the sumpplemental page table
+      fails is that, not setting the page in it.
+
+      From the above, we know that:
+      user virtual page UPAGE is on the physical frame 
+      identified by kernel virtual address KPAGE.
+      So we will set the status to ON_FRAME.
+   */
+#ifdef VM
+  is_succeed = is_succeed && sup_page_table_set_page (t->sup_pt, upage);
+#endif
+
+  return is_succeed;
 }

@@ -27,7 +27,7 @@ static struct hash frame_table;
 
 
 /** The helper function of `frame_table`.
-    Since physical address is a byte. Using `hash_bytes` here.
+    Since physical address are bytes. Using `hash_bytes` here.
     See the Sample hash functions of [hash.h]. 
  */
 static unsigned
