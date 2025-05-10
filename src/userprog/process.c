@@ -546,7 +546,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
-
+#ifndef VM
   file_seek (file, ofs);
   while (read_bytes > 0 || zero_bytes > 0) 
     {
@@ -581,6 +581,26 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
     }
+#else
+  /* The demand paging starts. Lazily load the segment. */
+  off_t cur_ofs = ofs;
+  struct thread *cur = thread_current ();
+  while (read_bytes > 0 || zero_bytes > 0)
+    {
+      size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+      size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+      if (!sup_page_table_set_page_file (
+        cur->sup_pt, (void *)upage, file, cur_ofs,
+        page_read_bytes, page_zero_bytes, writable
+      ))
+        return false;
+      read_bytes -= page_read_bytes;
+      zero_bytes -= page_zero_bytes;
+      upage += PGSIZE;
+      cur_ofs += PGSIZE;
+    }
+#endif
   return true;
 }
 

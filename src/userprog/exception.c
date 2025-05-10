@@ -209,6 +209,7 @@ page_fault (struct intr_frame *f)
   /* Fetch the data into the frame, 
      by reading it from the file system 
      or swap, zeroing it, etc. */
+   bool writable = true;
    switch (sup_pte->status)
    {
    case ALL_ZERO:
@@ -231,7 +232,7 @@ page_fault (struct intr_frame *f)
      }
      
      memset (frame + read_bytes, 0, sup_pte->zero_bytes);
-     write = sup_pte->writable;
+     writable = sup_pte->writable;
      break;
    default:
       terminate_process (fault_addr, not_present, write, user, f);
@@ -239,7 +240,7 @@ page_fault (struct intr_frame *f)
 
    /* Point the page table entry for the faulting virtual address 
       to the physical page. */
-   if (!pagedir_set_page (cur->pagedir, fault_page, frame, true))
+   if (!pagedir_set_page (cur->pagedir, fault_page, frame, writable))
    {
      /* The setting fails. */
      frame_free (frame);

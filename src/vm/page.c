@@ -12,7 +12,7 @@ sup_hash_func (const struct hash_elem *elem, void *aux)
   struct sup_page_table_entry *sup_pte = 
     hash_entry (elem, struct sup_page_table_entry, sup_elem);
   size_t uaddr_size = sizeof (sup_pte->user_page);
-  return hash_bytes (sup_pte->user_page, uaddr_size);
+  return hash_bytes (&sup_pte->user_page, uaddr_size);
 }
 
 
