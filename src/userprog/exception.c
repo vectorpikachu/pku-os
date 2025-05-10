@@ -12,10 +12,13 @@
 /* Memeset */
 #include "string.h"
 
+#include "filesys/file.h"
+
 /* Add headers of VM. */
 #ifdef VM
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "vm/swap.h"
 #endif
 
 /** Number of page faults processed. */
@@ -183,6 +186,12 @@ page_fault (struct intr_frame *f)
   struct sup_page_table_entry *sup_pte = 
    sup_page_table_find (cur->sup_pt, fault_page);
 
+  if (sup_pte->status == ON_FRAME)
+  {
+     /* Already loaded. */
+     return;
+  }
+
   /* If the memory reference is valid, 
      use the supplemental page table entry 
      to locate the data that goes in the page. */
@@ -202,14 +211,30 @@ page_fault (struct intr_frame *f)
      or swap, zeroing it, etc. */
    switch (sup_pte->status)
    {
-     case ALL_ZERO:
-       memset (frame, 0, PGSIZE);
-       break;
-     case ON_FRAME:
-       /* Already on the frame. */
-       break;
-     default:
+   case ALL_ZERO:
+      memset (frame, 0, PGSIZE);
+      break;
+   case ON_FRAME:
+      /* Already on the frame. */
+      break;
+   case SWAP_SLOT:
+     /* Swap in. */
+     swap_in (sup_pte->st_index, frame);
+     break;
+   case FILE_SYS:
+     file_seek (sup_pte->file, sup_pte->ofs);
+     off_t read_bytes = file_read (sup_pte->file, frame, sup_pte->read_bytes);
+     if (read_bytes != sup_pte->read_bytes)
+     {
+       frame_free (frame); /* Release the resources before terminating. */
        terminate_process (fault_addr, not_present, write, user, f);
+     }
+     
+     memset (frame + read_bytes, 0, sup_pte->zero_bytes);
+     write = sup_pte->writable;
+     break;
+   default:
+      terminate_process (fault_addr, not_present, write, user, f);
    }
 
    /* Point the page table entry for the faulting virtual address 
@@ -220,6 +245,7 @@ page_fault (struct intr_frame *f)
      frame_free (frame);
      terminate_process (fault_addr, not_present, write, user, f);
    }
+   sup_pte->frame = frame;
    sup_pte->status = ON_FRAME;
    
    pagedir_set_dirty (cur->pagedir, frame, false);
