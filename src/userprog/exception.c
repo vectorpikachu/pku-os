@@ -5,11 +5,31 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+/* For the operations of pages. */
+#include "userprog/pagedir.h"
+#include "threads/vaddr.h"
+
+/* Memeset */
+#include "string.h"
+
+/* Add headers of VM. */
+#ifdef VM
+#include "vm/frame.h"
+#include "vm/page.h"
+#endif
+
 /** Number of page faults processed. */
 static long long page_fault_cnt;
 
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
+
+void
+terminate_process (void *fault_addr,
+                   bool not_present, 
+                   bool write, 
+                   bool user,
+                   struct intr_frame *f);
 
 /** Registers handlers for interrupts that can be caused by user
    programs.
@@ -155,6 +175,69 @@ page_fault (struct intr_frame *f)
     return;
   }
 
+#ifdef VM
+  /* Locate the page that faulted in the supplemental page table. */
+  struct thread *cur = thread_current ();
+  void *fault_page = (void *) pg_round_down (fault_addr);
+
+  struct sup_page_table_entry *sup_pte = 
+   sup_page_table_find (cur->sup_pt, fault_page);
+
+  /* If the memory reference is valid, 
+     use the supplemental page table entry 
+     to locate the data that goes in the page. */
+
+  /* Any invalid access terminates the process 
+     and thereby frees all of its resources.*/
+  if (sup_pte == NULL)
+    terminate_process (fault_addr, not_present, write, user, f);
+
+  /* Obtain a frame to store the page. */
+  void *frame = frame_alloc (PAL_USER);
+  if (frame == NULL)
+    terminate_process (fault_addr, not_present, write, user, f);
+
+  /* Fetch the data into the frame, 
+     by reading it from the file system 
+     or swap, zeroing it, etc. */
+   switch (sup_pte->status)
+   {
+     case ALL_ZERO:
+       memset (frame, 0, PGSIZE);
+       break;
+     case ON_FRAME:
+       /* Already on the frame. */
+       break;
+     default:
+       terminate_process (fault_addr, not_present, write, user, f);
+   }
+
+   /* Point the page table entry for the faulting virtual address 
+      to the physical page. */
+   if (!pagedir_set_page (cur->pagedir, fault_page, frame, true))
+   {
+     /* The setting fails. */
+     frame_free (frame);
+     terminate_process (fault_addr, not_present, write, user, f);
+   }
+   sup_pte->status = ON_FRAME;
+   
+   pagedir_set_dirty (cur->pagedir, frame, false);
+
+#else
+  terminate_process (fault_addr, not_present, write, user, f);  
+#endif
+}
+
+
+/** Hey, I don't want to delete this codes. Let it be here. */
+void
+terminate_process (void *fault_addr,
+                   bool not_present, 
+                   bool write, 
+                   bool user,
+                   struct intr_frame *f)
+{
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */

@@ -60,4 +60,8 @@ struct sup_page_table *sup_page_table_create (void);
 void sup_page_table_destroy (struct sup_page_table *sup_pt);
 bool sup_page_table_set_page (struct sup_page_table *sup_pt, void *user_page);
 
+struct sup_page_table_entry *sup_page_table_find (
+  struct sup_page_table *sup_pt, void *page
+);
+
 #endif

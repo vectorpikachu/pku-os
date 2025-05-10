@@ -75,12 +75,27 @@ sup_page_table_set_page (struct sup_page_table *sup_pt, void *user_page)
   sup_pte->user_page = user_page;
   sup_pte->status = ON_FRAME;
 
-  struct hash_elem *inserted = hash_insert (&sup_pt->page_map, &sup_pte->sup_elem);
-  if (inserted == NULL)
+  struct hash_elem *insert_elem = hash_insert (&sup_pt->page_map, &sup_pte->sup_elem);
+  if (insert_elem == NULL)
     return true;
   else
   {
     free (sup_pte);
     return false;
   }
+}
+
+
+
+/** Find the corresponding entry of PAGE in supplemental page table SUP_PT. */
+struct sup_page_table_entry *
+sup_page_table_find (struct sup_page_table *sup_pt, void *page)
+{
+  struct sup_page_table_entry *sup_pte;
+  sup_pte->user_page = page;
+
+  struct hash_elem *find_elem = hash_find (&sup_pt->page_map, &sup_pte->sup_elem);
+  if (find_elem == NULL)
+    return NULL;
+  return hash_entry (find_elem, struct sup_page_table_entry, sup_elem);
 }
