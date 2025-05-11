@@ -264,6 +264,8 @@ sup_page_table_set_page (struct sup_page_table *sup_pt,
    
   pagedir_set_dirty (pagedir, frame, false);
 
+  frame_unpin (frame);
+
   return true;
 }
 
@@ -295,6 +297,7 @@ page_pin (struct sup_page_table *sup_pt, void *page)
   if (sup_pte == NULL)
     return;
   
+  ASSERT (sup_pte->status == ON_FRAME);
   frame_pin (sup_pte->frame);
 }
 

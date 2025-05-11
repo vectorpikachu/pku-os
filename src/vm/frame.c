@@ -102,6 +102,9 @@ frame_alloc (enum palloc_flags flags, void *user_page)
     /* Try to evict a page to get in. */
     struct frame_table_entry *frame_evict = 
       frame_to_evict (thread_current ()->pagedir);
+
+    ASSERT (frame_evict != NULL && frame_evict->rel_thread != NULL);
+    
     /* Mark this page as not present. */
     pagedir_clear_page (frame_evict->rel_thread->pagedir,
                         frame_evict->user_page);
@@ -117,8 +120,10 @@ frame_alloc (enum palloc_flags flags, void *user_page)
                                   st_index);
     sup_page_table_set_dirty (frame_evict->rel_thread->sup_pt,
                               frame_evict->user_page, dirty);
-    frame_free (frame_evict->frame);
+    frame_free_without_lock (frame_evict->frame);
     frame = palloc_get_page (PAL_USER | flags);
+
+    ASSERT (frame != NULL);
   }
   
   size_t fte_size = sizeof (struct frame_table_entry);
@@ -151,16 +156,14 @@ frame_alloc (enum palloc_flags flags, void *user_page)
   return frame;
 }
 
-/** Free a frame. */
 void
-frame_free (void *frame)
+frame_free_without_lock (void *frame)
 {
   /** Check the validity of a given frame.
       page-aligned: start on a virtual address evenly divisible by the page size.
       Which means: the offset must be 0.
    */
-  if (pg_ofs (frame) == 0)
-    return;
+  ASSERT (pg_ofs (frame) == 0);
 
   /** By storing the address of the frame in an entry
       we can use `hash_find` to find the actual entry.
@@ -183,13 +186,21 @@ frame_free (void *frame)
   fte = hash_entry (find_elem, struct frame_table_entry, frame_elem);
 
   /** Now delete this frame from the frame table. */
-  lock_acquire (&frame_lock);
+  
   hash_delete (&frame_table, &fte->frame_elem);
   list_remove (&fte->fl_elem);
-  lock_release (&frame_lock);
   
-  palloc_free_page (fte->user_page);
+  palloc_free_page (fte->frame);
   free(fte);
+}
+
+/** Free a frame. */
+void
+frame_free (void *frame)
+{
+  lock_acquire (&frame_lock);
+  frame_free_without_lock (frame);
+  lock_release (&frame_lock);
 }
 
 /** Choose the frame to be evicted.  */

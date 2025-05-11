@@ -585,6 +585,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   /* The demand paging starts. Lazily load the segment. */
   off_t cur_ofs = ofs;
   struct thread *cur = thread_current ();
+  /* Should not have any user pages. */
+  ASSERT (pagedir_get_page (cur->pagedir, upage) == NULL);
   while (read_bytes > 0 || zero_bytes > 0)
     {
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
@@ -654,6 +656,7 @@ install_page (void *upage, void *kpage, bool writable)
    */
 #ifdef VM
   is_succeed = is_succeed && sup_page_table_set_page_frame (t->sup_pt, upage, kpage);
+  if (is_succeed) frame_unpin (kpage);
 #endif
 
   return is_succeed;

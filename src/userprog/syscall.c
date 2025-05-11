@@ -286,15 +286,15 @@ sys_read (struct intr_frame *f)
     if (pf == NULL) {
       f->eax = -1; /* File not found. */
     } else {
-      acquire_file_lock ();
 #ifdef VM
       preset_pages (buffer, size);
 #endif
+      acquire_file_lock ();
       f->eax = file_read (pf->file, buffer, size);
+      release_file_lock ();
 #ifdef VM
       unpin_preset_pages (buffer, size);
 #endif
-      release_file_lock ();
     }
   }
 }
@@ -315,15 +315,15 @@ sys_write (struct intr_frame *f)
     if (pf == NULL) {
       f->eax = -1; /* File not found. */
     } else {
-      acquire_file_lock ();
 #ifdef VM
       preset_pages (buffer, size);
 #endif
+      acquire_file_lock ();
       f->eax = file_write (pf->file, buffer, size);
+      release_file_lock ();
 #ifdef VM
       unpin_preset_pages (buffer, size);
 #endif
-      release_file_lock ();
     }
   }
 }

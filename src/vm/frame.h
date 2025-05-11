@@ -43,6 +43,8 @@ void frame_init (void);
 void *frame_alloc (enum palloc_flags flags, void *user_page);
 void frame_free (void *frame);
 
+void frame_free_without_lock (void *frame);
+
 void frame_pin (void *frame);
 void frame_unpin (void *frame);
 
