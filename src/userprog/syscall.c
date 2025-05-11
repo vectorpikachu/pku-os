@@ -30,6 +30,7 @@ void exit_err (void);
 struct process_file *get_process_file (int fd);
 
 void preset_pages (void *buffer, size_t size);
+void unpin_preset_pages (void *buffer, size_t size);
 
 static void syscall_handler (struct intr_frame *);
 static void sys_halt (struct intr_frame *);
@@ -290,6 +291,9 @@ sys_read (struct intr_frame *f)
       preset_pages (buffer, size);
 #endif
       f->eax = file_read (pf->file, buffer, size);
+#ifdef VM
+      unpin_preset_pages (buffer, size);
+#endif
       release_file_lock ();
     }
   }
@@ -316,6 +320,9 @@ sys_write (struct intr_frame *f)
       preset_pages (buffer, size);
 #endif
       f->eax = file_write (pf->file, buffer, size);
+#ifdef VM
+      unpin_preset_pages (buffer, size);
+#endif
       release_file_lock ();
     }
   }
@@ -371,7 +378,9 @@ sys_close (struct intr_frame *f)
   }
 }
 
-void preset_pages (void *buffer, size_t size)
+/** We must pin the page holding the resources. */
+void
+preset_pages (void *buffer, size_t size)
 {
   struct sup_page_tabe *sup_pt = thread_current ()->sup_pt;
   uint32_t *pagedir = thread_current ()->pagedir;
@@ -379,6 +388,22 @@ void preset_pages (void *buffer, size_t size)
   while (user_page <= buffer + size)
   {
     sup_page_table_set_page (sup_pt, pagedir, user_page);
+    page_pin (sup_pt, user_page);
+    user_page += PGSIZE;
+  }
+}
+
+
+/** Unpin this pre-pinned pages. */
+void
+unpin_preset_pages (void *buffer, size_t size)
+{
+  struct sup_page_tabe *sup_pt = thread_current ()->sup_pt;
+  uint32_t *pagedir = thread_current ()->pagedir;
+  void *user_page = pg_round_down (buffer);
+  while (user_page <= buffer + size)
+  {
+    page_unpin (sup_pt, user_page);
     user_page += PGSIZE;
   }
 }

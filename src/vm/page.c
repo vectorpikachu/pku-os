@@ -1,5 +1,6 @@
 #include "lib/kernel/hash.h"
 #include "vm/page.h"
+#include "vm/frame.h"
 #include "userprog/pagedir.h"
 #include "threads/palloc.h"
 #include "threads/vaddr.h"
@@ -214,7 +215,7 @@ sup_page_table_set_page (struct sup_page_table *sup_pt,
   }
 
   /* Obtain a frame to store the page. */
-  void *frame = frame_alloc (PAL_USER);
+  void *frame = frame_alloc (PAL_USER, user_page);
   if (frame == NULL)
     return false;
 
@@ -275,4 +276,40 @@ sup_page_table_set_dirty (struct sup_page_table *sup_pt, void *page, bool value)
 
   sup_pte->dirty = sup_pte->dirty || value;
   return true;
+}
+
+/** Pin the page.
+  
+    While accessing user memory, your kernel must either be prepared 
+    to handle such page faults, or it must prevent them from occurring.
+    
+    For instance, you could extend your frame table to record 
+    when a page contained in a frame must not be evicted. 
+    (This is also referred to as "pinning" 
+    or "locking" the page in its frame.)*/
+void
+page_pin (struct sup_page_table *sup_pt, void *page)
+{
+  struct sup_page_table_entry *sup_pte;
+  sup_pte = sup_page_table_find (sup_pt, page);
+  if (sup_pte == NULL)
+    return;
+  
+  frame_pin (sup_pte->frame);
+}
+
+
+/** Unpin this page PAGE. */
+void
+page_unpin (struct sup_page_table *sup_pt, void *page)
+{
+  struct sup_page_table_entry *sup_pte;
+  sup_pte = sup_page_table_find (sup_pt, page);
+  if (sup_pte == NULL)
+    return;
+  
+  if (sup_pte->status == ON_FRAME)
+  {
+    frame_unpin (sup_pte->frame);
+  }
 }

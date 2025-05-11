@@ -208,6 +208,11 @@ frame_to_evict (uint32_t pagedir)
     else
       clock_hand = list_next (clock_hand);
     fte = list_entry (clock_hand, struct frame_table_entry, fl_elem);
+    if (fte->pinning)
+    {
+      /* This frame is currently pinning. */
+      continue;
+    }
     if (pagedir_is_accessed (pagedir, fte->user_page))
     {
       /* N = 2. */
@@ -217,4 +222,52 @@ frame_to_evict (uint32_t pagedir)
     return fte;
   }
   return NULL;
+}
+
+/** Pinning a frame. */
+void
+frame_pin (void *frame)
+{
+  lock_acquire (&frame_lock);
+  struct frame_table_entry *fte;
+  size_t fte_size = sizeof (struct frame_table_entry);
+  fte = (struct frame_table_entry *)malloc (fte_size);
+
+  fte->frame = frame;
+  struct hash_elem *find_elem = hash_find (&frame_table, &fte->frame_elem);
+  if (find_elem == NULL)
+  {
+    free (fte);
+    return;
+  }
+  
+  free (fte);
+  fte = hash_entry (find_elem, struct frame_table_entry, frame_elem);
+  fte -> pinning = true;
+
+  lock_release (&frame_lock);
+}
+
+/** Umpinning a frame. */
+void
+frame_unpin (void *frame)
+{
+  lock_acquire (&frame_lock);
+  struct frame_table_entry *fte;
+  size_t fte_size = sizeof (struct frame_table_entry);
+  fte = (struct frame_table_entry *)malloc (fte_size);
+
+  fte->frame = frame;
+  struct hash_elem *find_elem = hash_find (&frame_table, &fte->frame_elem);
+  if (find_elem == NULL)
+  {
+    free (fte);
+    return;
+  }
+  
+  free (fte);
+  fte = hash_entry (find_elem, struct frame_table_entry, frame_elem);
+  fte -> pinning = false;
+
+  lock_release (&frame_lock);
 }

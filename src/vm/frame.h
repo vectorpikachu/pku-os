@@ -34,11 +34,16 @@ struct frame_table_entry
 
     struct thread *rel_thread;      /** The related thread. */
     struct list_elem fl_elem;       /** The list element to form a frame list. */
+
+    bool pinning;                   /** The pinning value: whether should be evicted. */
   };
 
 
 void frame_init (void);
 void *frame_alloc (enum palloc_flags flags, void *user_page);
 void frame_free (void *frame);
+
+void frame_pin (void *frame);
+void frame_unpin (void *frame);
 
 #endif

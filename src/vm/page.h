@@ -116,5 +116,13 @@ sup_page_table_set_page (struct sup_page_table *sup_pt,
                          uint32_t *pagedir, void *user_page);
 
 bool
-sup_page_table_set_dirty (struct sup_page_table *sup_pt, void *page, bool value);
+sup_page_table_set_dirty (struct sup_page_table *sup_pt, 
+                          void *page, bool value);
+
+void
+page_pin (struct sup_page_table *sup_pt, void *page);
+
+void
+page_unpin (struct sup_page_table *sup_pt, void *page);
+
 #endif
