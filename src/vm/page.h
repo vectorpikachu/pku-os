@@ -81,7 +81,6 @@ struct sup_page_table_entry
 
 struct sup_page_table *sup_page_table_create (void);
 void sup_page_table_destroy (struct sup_page_table *sup_pt);
-bool sup_page_table_set_page (struct sup_page_table *sup_pt, void *user_page);
 
 struct sup_page_table_entry *sup_page_table_find (
   struct sup_page_table *sup_pt, void *page
@@ -111,4 +110,8 @@ sup_page_table_set_page_file (struct sup_page_table *sup_pt,
                               uint32_t zero_bytes,
                               bool writable);
 
+
+bool
+sup_page_table_set_page (struct sup_page_table *sup_pt,
+                         uint32_t *pagedir, void *user_page);
 #endif

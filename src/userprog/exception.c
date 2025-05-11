@@ -171,85 +171,18 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  /* page fault triggered by a bad reference from a system call */  
-  if (!user) {
-    f->eip = (void (*) (void)) f->eax;
-    f->eax = -1;
-    return;
-  }
-
 #ifdef VM
   /* Locate the page that faulted in the supplemental page table. */
   struct thread *cur = thread_current ();
   void *fault_page = (void *) pg_round_down (fault_addr);
 
-  struct sup_page_table_entry *sup_pte = 
-   sup_page_table_find (cur->sup_pt, fault_page);
-
-  if (sup_pte->status == ON_FRAME)
+  if (!not_present)
   {
-     /* Already loaded. */
-     return;
+   /* Try to violate. */
+   terminate_process (fault_addr, not_present, write, user, f); 
   }
-
-  /* If the memory reference is valid, 
-     use the supplemental page table entry 
-     to locate the data that goes in the page. */
-
-  /* Any invalid access terminates the process 
-     and thereby frees all of its resources.*/
-  if (sup_pte == NULL)
-    terminate_process (fault_addr, not_present, write, user, f);
-
-  /* Obtain a frame to store the page. */
-  void *frame = frame_alloc (PAL_USER);
-  if (frame == NULL)
-    terminate_process (fault_addr, not_present, write, user, f);
-
-  /* Fetch the data into the frame, 
-     by reading it from the file system 
-     or swap, zeroing it, etc. */
-   bool writable = true;
-   switch (sup_pte->status)
-   {
-   case ALL_ZERO:
-      memset (frame, 0, PGSIZE);
-      break;
-   case ON_FRAME:
-      /* Already on the frame. */
-      break;
-   case SWAP_SLOT:
-     /* Swap in. */
-     swap_in (sup_pte->st_index, frame);
-     break;
-   case FILE_SYS:
-     file_seek (sup_pte->file, sup_pte->ofs);
-     off_t read_bytes = file_read (sup_pte->file, frame, sup_pte->read_bytes);
-     if (read_bytes != sup_pte->read_bytes)
-     {
-       frame_free (frame); /* Release the resources before terminating. */
-       terminate_process (fault_addr, not_present, write, user, f);
-     }
-     
-     memset (frame + read_bytes, 0, sup_pte->zero_bytes);
-     writable = sup_pte->writable;
-     break;
-   default:
-      terminate_process (fault_addr, not_present, write, user, f);
-   }
-
-   /* Point the page table entry for the faulting virtual address 
-      to the physical page. */
-   if (!pagedir_set_page (cur->pagedir, fault_page, frame, writable))
-   {
-     /* The setting fails. */
-     frame_free (frame);
-     terminate_process (fault_addr, not_present, write, user, f);
-   }
-   sup_pte->frame = frame;
-   sup_pte->status = ON_FRAME;
-   
-   pagedir_set_dirty (cur->pagedir, frame, false);
+  if (!sup_page_table_set_page (cur->sup_pt, cur->pagedir, fault_page))
+    terminate_process (fault_addr, not_present, write, user, f);  
 
 #else
   terminate_process (fault_addr, not_present, write, user, f);  
@@ -265,6 +198,12 @@ terminate_process (void *fault_addr,
                    bool user,
                    struct intr_frame *f)
 {
+  /* page fault triggered by a bad reference from a system call */  
+  if (!user) {
+    f->eip = (void (*) (void)) f->eax;
+    f->eax = -1;
+    return;
+  }
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */

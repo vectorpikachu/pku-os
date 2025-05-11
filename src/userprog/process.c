@@ -652,7 +652,7 @@ install_page (void *upage, void *kpage, bool writable)
       So we will set the status to ON_FRAME.
    */
 #ifdef VM
-  is_succeed = is_succeed && sup_page_table_set_page (t->sup_pt, upage);
+  is_succeed = is_succeed && sup_page_table_set_page_frame (t->sup_pt, upage, kpage);
 #endif
 
   return is_succeed;

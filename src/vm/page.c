@@ -1,5 +1,8 @@
 #include "lib/kernel/hash.h"
 #include "vm/page.h"
+#include "userprog/pagedir.h"
+#include "threads/palloc.h"
+#include "threads/vaddr.h"
 
 
 /** Helper functions of creating a supplemental page table.
@@ -63,27 +66,6 @@ sup_page_table_destroy (struct sup_page_table *sup_pt)
   free (sup_pt);
 }
 
-
-/** Set the page in supplemental page table. */
-bool
-sup_page_table_set_page (struct sup_page_table *sup_pt, void *user_page)
-{
-  size_t sup_pte_size = sizeof (struct sup_page_table_entry);
-  struct sup_page_table_entry *sup_pte;
-  sup_pte = (struct sup_page_table_entry *)malloc (sup_pte_size);
-
-  sup_pte->user_page = user_page;
-  sup_pte->status = ON_FRAME;
-
-  struct hash_elem *insert_elem = hash_insert (&sup_pt->page_map, &sup_pte->sup_elem);
-  if (insert_elem == NULL)
-    return true;
-  else
-  {
-    free (sup_pte);
-    return false;
-  }
-}
 
 /** Find the corresponding entry of PAGE in supplemental page table SUP_PT. */
 struct sup_page_table_entry *
@@ -206,4 +188,80 @@ sup_page_table_set_page_file (struct sup_page_table *sup_pt,
     free (sup_pte);
     return false;
   }
+}
+
+/* Set the page. Extract this method from the fault_handler in exception.c */
+bool
+sup_page_table_set_page (struct sup_page_table *sup_pt,
+                         uint32_t *pagedir, void *user_page)
+{
+  struct sup_page_table_entry *sup_pte = 
+   sup_page_table_find (sup_pt, user_page);
+
+  /* If the memory reference is valid, 
+     use the supplemental page table entry 
+     to locate the data that goes in the page. */
+
+  /* Any invalid access terminates the process 
+     and thereby frees all of its resources.*/
+  if (sup_pte == NULL)
+    return false;
+
+  if (sup_pte->status == ON_FRAME)
+  {
+    /* Already loaded. */
+    return true;
+  }
+
+  /* Obtain a frame to store the page. */
+  void *frame = frame_alloc (PAL_USER);
+  if (frame == NULL)
+    return false;
+
+  /* Fetch the data into the frame, 
+     by reading it from the file system 
+     or swap, zeroing it, etc. */
+   bool writable = true;
+   switch (sup_pte->status)
+   {
+   case ALL_ZERO:
+      memset (frame, 0, PGSIZE);
+      break;
+   case ON_FRAME:
+      /* Already on the frame. */
+      break;
+   case SWAP_SLOT:
+      /* Swap in. */
+      swap_in (sup_pte->st_index, frame);
+      break;
+   case FILE_SYS:
+      file_seek (sup_pte->file, sup_pte->ofs);
+      off_t read_bytes = file_read (sup_pte->file, frame, sup_pte->read_bytes);
+      if (read_bytes != sup_pte->read_bytes)
+      {
+        frame_free (frame); /* Release the resources before terminating. */
+        return false;
+      }
+     
+      memset (frame + read_bytes, 0, sup_pte->zero_bytes);
+      writable = sup_pte->writable;
+      break;
+   default:
+      return false;
+   }
+
+  /* Point the page table entry for the faulting virtual address 
+     to the physical page. */
+  if (!pagedir_set_page (pagedir, user_page, frame, writable))
+  {
+    /* The setting fails. */
+    frame_free (frame);
+    return false;
+  }
+  sup_pte->frame = frame;
+  sup_pte->status = ON_FRAME;
+   
+  pagedir_set_dirty (pagedir, frame, false);
+
+  return true;
 }

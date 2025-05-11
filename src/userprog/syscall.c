@@ -11,6 +11,11 @@
 #include "filesys/file.h"
 #include "threads/thread.h"
 
+#ifdef VM
+#include "vm/frame.h"
+#include "vm/page.h"
+#endif
+
 #define SYSCALL_NUM 30
 
 /* syscalls array */
@@ -23,6 +28,8 @@ static bool put_user (uint8_t *udst, uint8_t byte);
 void check_valid_pointer (const void *vaddr);
 void exit_err (void);
 struct process_file *get_process_file (int fd);
+
+void preset_pages (void *buffer, size_t size);
 
 static void syscall_handler (struct intr_frame *);
 static void sys_halt (struct intr_frame *);
@@ -279,6 +286,9 @@ sys_read (struct intr_frame *f)
       f->eax = -1; /* File not found. */
     } else {
       acquire_file_lock ();
+#ifdef VM
+      preset_pages (buffer, size);
+#endif
       f->eax = file_read (pf->file, buffer, size);
       release_file_lock ();
     }
@@ -302,6 +312,9 @@ sys_write (struct intr_frame *f)
       f->eax = -1; /* File not found. */
     } else {
       acquire_file_lock ();
+#ifdef VM
+      preset_pages (buffer, size);
+#endif
       f->eax = file_write (pf->file, buffer, size);
       release_file_lock ();
     }
@@ -355,5 +368,17 @@ sys_close (struct intr_frame *f)
     release_file_lock ();
     list_remove (&pf->file_elem);
     free (pf);
+  }
+}
+
+void preset_pages (void *buffer, size_t size)
+{
+  struct sup_page_tabe *sup_pt = thread_current ()->sup_pt;
+  uint32_t *pagedir = thread_current ()->pagedir;
+  void *user_page = pg_round_down (buffer);
+  while (user_page <= buffer + size)
+  {
+    sup_page_table_set_page (sup_pt, pagedir, user_page);
+    user_page += PGSIZE;
   }
 }
