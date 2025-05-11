@@ -14,8 +14,10 @@
  */
 
 #include "lib/kernel/hash.h"
+#include "lib/kernel/list.h"
 
 #include "threads/palloc.h"
+#include "threads/thread.h"
 
 /** The Frame Table Entry.
     It contains a user page (a pointer to the page).
@@ -26,14 +28,17 @@
  */
 struct frame_table_entry
   {
-    void *phy_addr;                 /** Physical Address. */
+    void *frame;                    /** Physical frame. */
     struct hash_elem frame_elem;    /** The hash element. See [frame.c] */
     void *user_page;                /** Pointer to the user page. */
+
+    struct thread *rel_thread;      /** The related thread. */
+    struct list_elem fl_elem;       /** The list element to form a frame list. */
   };
 
 
 void frame_init (void);
-void *frame_alloc (enum palloc_flags flags);
+void *frame_alloc (enum palloc_flags flags, void *user_page);
 void frame_free (void *frame);
 
 #endif

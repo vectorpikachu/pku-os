@@ -265,3 +265,14 @@ sup_page_table_set_page (struct sup_page_table *sup_pt,
 
   return true;
 }
+
+bool
+sup_page_table_set_dirty (struct sup_page_table *sup_pt, void *page, bool value)
+{
+  struct sup_page_table_entry *sup_pte = sup_page_table_find (sup_pt, page);
+  if (sup_pte == NULL)
+    return false;
+
+  sup_pte->dirty = sup_pte->dirty || value;
+  return true;
+}

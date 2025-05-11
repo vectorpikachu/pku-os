@@ -25,7 +25,7 @@
     any code of Lab 2.
  */
 #ifndef VM
-#define frame_alloc(f) palloc_get_page(f)
+#define frame_alloc(f, u) palloc_get_page(f)
 #define frame_free(f) palloc_free_page(f)
 #endif
 
@@ -557,7 +557,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       /* Get a page of memory. */
-      uint8_t *kpage = frame_alloc (PAL_USER);
+      uint8_t *kpage = frame_alloc (PAL_USER, upage);
       if (kpage == NULL)
         return false;
 
@@ -612,7 +612,8 @@ setup_stack (void **esp)
   uint8_t *kpage;
   bool success = false;
 
-  kpage = frame_alloc (PAL_USER | PAL_ZERO);
+  /* Where is the user page? The first segment of the stack. */
+  kpage = frame_alloc (PAL_USER | PAL_ZERO, PHYS_BASE - PGSIZE);
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);

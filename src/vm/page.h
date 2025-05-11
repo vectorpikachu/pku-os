@@ -114,4 +114,7 @@ sup_page_table_set_page_file (struct sup_page_table *sup_pt,
 bool
 sup_page_table_set_page (struct sup_page_table *sup_pt,
                          uint32_t *pagedir, void *user_page);
+
+bool
+sup_page_table_set_dirty (struct sup_page_table *sup_pt, void *page, bool value);
 #endif
