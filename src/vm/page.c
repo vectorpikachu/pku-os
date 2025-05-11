@@ -4,6 +4,7 @@
 #include "userprog/pagedir.h"
 #include "threads/palloc.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 
 
 /** Helper functions of creating a supplemental page table.

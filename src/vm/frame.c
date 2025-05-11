@@ -115,6 +115,11 @@ frame_alloc (enum palloc_flags flags, void *user_page)
                                    frame_evict->frame);
     /* Swap this evicted page out. */
     uint32_t st_index = swap_out (frame_evict->frame);
+    if (st_index == (uint32_t)-1)
+    {
+      PANIC ("swap full - cannot evict frame %p for user page %p\n",
+            frame_evict->frame, frame_evict->user_page);
+    }
     sup_page_table_set_page_swap (frame_evict->rel_thread->sup_pt,
                                   frame_evict->user_page,
                                   st_index);
@@ -254,7 +259,7 @@ frame_pin (void *frame)
   
   free (fte);
   fte = hash_entry (find_elem, struct frame_table_entry, frame_elem);
-  fte -> pinning = true;
+  fte->pinning = true;
 
   lock_release (&frame_lock);
 }
@@ -278,7 +283,7 @@ frame_unpin (void *frame)
   
   free (fte);
   fte = hash_entry (find_elem, struct frame_table_entry, frame_elem);
-  fte -> pinning = false;
+  fte->pinning = false;
 
   lock_release (&frame_lock);
 }

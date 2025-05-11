@@ -19,6 +19,8 @@
 #include "vm/frame.h"
 #include "vm/page.h"
 #include "vm/swap.h"
+static long long page_fault_depth;
+#define MAX_FAULT_DEPTH 4
 #endif
 
 /** Number of page faults processed. */
@@ -166,24 +168,36 @@ page_fault (struct intr_frame *f)
   /* Count page faults. */
   page_fault_cnt++;
 
+#ifdef VM
+  page_fault_depth++;
+  if (page_fault_depth > MAX_FAULT_DEPTH)
+  {
+    f->eip = (void (*) (void)) f->eax;
+    f->eax = -1;
+    return;
+  }
+#endif
+
+
   /* Determine cause. */
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
 #ifdef VM
+  if (!not_present || !fault_addr || !is_user_vaddr (fault_addr))
+  {
+    /* Try to violate. */
+    terminate_process (fault_addr, not_present, write, user, f); 
+  }
   /* Locate the page that faulted in the supplemental page table. */
   struct thread *cur = thread_current ();
   void *fault_page = (void *) pg_round_down (fault_addr);
 
-  if (!not_present)
-  {
-   /* Try to violate. */
-   terminate_process (fault_addr, not_present, write, user, f); 
-  }
   if (!sup_page_table_set_page (cur->sup_pt, cur->pagedir, fault_page))
     terminate_process (fault_addr, not_present, write, user, f);  
-
+  
+  page_fault_depth--;
 #else
   terminate_process (fault_addr, not_present, write, user, f);  
 #endif
@@ -204,14 +218,6 @@ terminate_process (void *fault_addr,
     f->eax = -1;
     return;
   }
-  /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
   kill (f);
 }
 

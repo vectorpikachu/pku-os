@@ -62,6 +62,8 @@ swap_out (void *page)
 {
   /* Using `bitmap_scan` to find *one* slot. */
   size_t free_slot = bitmap_scan (swap_table, 0, 1, true);
+  if (free_slot == BITMAP_ERROR)
+    return -1;
 
   /* Now write the content of this page PAGE to the
      found free slot. We can only write in unit of SECTORs. */

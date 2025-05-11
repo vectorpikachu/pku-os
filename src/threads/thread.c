@@ -356,15 +356,14 @@ thread_exit (void)
   /* Close all opened files. */
   struct list *file_list = &thread_current ()->file_list;
   struct list_elem *e;
-  acquire_file_lock ();
+  
   for (e = list_begin (file_list); e != list_end (file_list); 
        e = list_remove (e)) {
     struct process_file *pf = list_entry (e, struct process_file, file_elem);
     file_close (pf->file);
     free (pf);
   }
-  release_file_lock ();
-
+  
   struct list *children = &thread_current ()->children;
   /* Free all child_process entries we allocated (if we're the parent). */
   while (!list_empty (children)) {
@@ -373,7 +372,7 @@ thread_exit (void)
     free (cp);
   }
 
-  list_remove (&thread_current()->allelem);
+  list_remove (&thread_current ()->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
