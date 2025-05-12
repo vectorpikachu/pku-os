@@ -81,7 +81,9 @@ swap_out (void *page)
     void *buf_start = page + BLOCK_SECTOR_SIZE * i;
     block_write (swap_block, sec_index, buf_start);
   }
+  lock_acquire (&swap_lock);
   bitmap_set (swap_table, free_slot, false);
+  lock_release (&swap_lock);
   return free_slot;
 }
 
@@ -92,10 +94,13 @@ swap_in (uint32_t st_index, void *page)
   ASSERT (page >= PHYS_BASE);
   ASSERT (st_index < swap_page_num);
 
+  lock_acquire (&swap_lock);
   if (bitmap_test (swap_table, st_index) == true)
   {
+    lock_release (&swap_lock);
     PANIC ("Read to empty swap space.");
   }
+  lock_release (&swap_lock);
 
   for (size_t i = 0; i < BLOCKSECS_PER_PAGE; i++)
   {
@@ -103,7 +108,9 @@ swap_in (uint32_t st_index, void *page)
     void *buf_start = page + BLOCK_SECTOR_SIZE * i;
     block_read (swap_block, sec_index, buf_start);
   }
+  lock_acquire (&swap_lock);
   bitmap_set (swap_table, st_index, true);
+  lock_release (&swap_lock);
 }
 
 
@@ -119,10 +126,12 @@ swap_free (uint32_t st_index)
   }
   ASSERT (st_index < swap_page_num);
 
+  lock_acquire (&swap_lock);
   if (bitmap_test (swap_table, st_index) == true)
   {
+    lock_release (&swap_lock);
     PANIC ("Read to empty swap space.");
   }
-
   bitmap_set (swap_table, st_index, true);
+  lock_release (&swap_lock);
 }

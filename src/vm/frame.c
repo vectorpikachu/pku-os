@@ -114,10 +114,6 @@ frame_alloc (enum palloc_flags flags, void *user_page)
               || pagedir_is_dirty (frame_evict->rel_thread->pagedir,
                                    frame_evict->frame);
     
-    /* It's a I/O for swap out. */
-    frame_evict->pinning = true;
-
-    lock_release (&frame_lock);
 
     /* Swap this evicted page out. */
     uint32_t st_index = swap_out (frame_evict->frame);
@@ -126,8 +122,6 @@ frame_alloc (enum palloc_flags flags, void *user_page)
       PANIC ("swap full - cannot evict frame %p for user page %p\n",
             frame_evict->frame, frame_evict->user_page);
     }
-
-    lock_acquire (&frame_lock);
 
     sup_page_table_set_page_swap (frame_evict->rel_thread->sup_pt,
                                   frame_evict->user_page,

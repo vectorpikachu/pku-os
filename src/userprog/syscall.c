@@ -157,6 +157,14 @@ syscall_init (void)
   syscalls[SYS_CLOSE] = &sys_close;
 }
 
+
+/** The most direct exit system call. */
+void exit (int status)
+{
+  thread_current ()->exit_status = status;
+  thread_exit ();
+}
+
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {

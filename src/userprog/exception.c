@@ -13,6 +13,7 @@
 #include "string.h"
 
 #include "filesys/file.h"
+#include "userprog/syscall.h"
 
 /* Add headers of VM. */
 #ifdef VM
@@ -114,7 +115,7 @@ kill (struct intr_frame *f)
       printf ("%s: dying due to interrupt %#04x (%s).\n",
               thread_name (), f->vec_no, intr_name (f->vec_no));
       intr_dump_frame (f);
-      thread_exit (); 
+      exit (-1); /* Kill with status -1. */ 
 
     case SEL_KCSEG:
       /* Kernel's code segment, which indicates a kernel bug.
@@ -129,7 +130,7 @@ kill (struct intr_frame *f)
          kernel. */
       printf ("Interrupt %#04x (%s) in unknown segment %04x\n",
              f->vec_no, intr_name (f->vec_no), f->cs);
-      thread_exit ();
+      exit (-1); /* Kill with status -1. */
     }
 }
 
@@ -185,13 +186,27 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-#ifdef VM
-  if (!not_present || !fault_addr || !is_user_vaddr (fault_addr))
+  if (!not_present || !fault_addr)
   {
     /* Try to violate. */
+#ifdef VM
     page_fault_depth--;
-    terminate_process (fault_addr, not_present, write, user, f); 
+#endif
+    /* Using sys_exit, we will not walk into the page fault again. */
+    exit (-1);
   }
+
+  if (user && !is_user_vaddr (fault_addr))
+  {
+   /* User accessing, and the address is not user addr. */
+#ifdef VM
+    page_fault_depth--;
+#endif
+    exit (-1);
+  }
+
+#ifdef VM
+  
   /* Locate the page that faulted in the supplemental page table. */
   struct thread *cur = thread_current ();
   void *fault_page = (void *) pg_round_down (fault_addr);
@@ -199,12 +214,14 @@ page_fault (struct intr_frame *f)
   if (!sup_page_table_set_page (cur->sup_pt, cur->pagedir, fault_page))
   {
    page_fault_depth--;
-   terminate_process (fault_addr, not_present, write, user, f); 
+   terminate_process (fault_addr, not_present, write, user, f);
+   return;
   }
   
   page_fault_depth--;
 #else
-  terminate_process (fault_addr, not_present, write, user, f);  
+  terminate_process (fault_addr, not_present, write, user, f);
+  return;
 #endif
 }
 
