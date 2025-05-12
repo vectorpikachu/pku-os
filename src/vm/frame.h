@@ -36,6 +36,8 @@ struct frame_table_entry
     struct list_elem fl_elem;       /** The list element to form a frame list. */
 
     bool pinning;                   /** The pinning value: whether should be evicted. */
+
+    int32_t cnt;                    /** To impl. Clock Algo. */
   };
 
 

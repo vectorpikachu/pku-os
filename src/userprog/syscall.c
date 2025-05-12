@@ -29,8 +29,10 @@ void check_valid_pointer (const void *vaddr);
 void exit_err (void);
 struct process_file *get_process_file (int fd);
 
+#ifdef VM
 void preset_pages (void *buffer, size_t size);
 void unpin_preset_pages (void *buffer, size_t size);
+#endif
 
 static void syscall_handler (struct intr_frame *);
 static void sys_halt (struct intr_frame *);
@@ -198,7 +200,14 @@ sys_exec (struct intr_frame *f)
 {
   const char *cmd_line = (const char *) get_argument (1, f);
   check_valid_pointer (cmd_line);
+  size_t size = sizeof (cmd_line);
+#ifdef VM
+  preset_pages (cmd_line, size);
+#endif
   f->eax = process_execute (cmd_line);
+#ifdef VM
+  unpin_preset_pages (cmd_line, size);
+#endif
 }
 
 /** Waits for a child process pid and retrieves the child's exit status.
@@ -219,8 +228,19 @@ sys_create (struct intr_frame *f)
   const char *file = (const char *) get_argument (1, f);
   unsigned initial_size = get_argument (2, f);
   check_valid_pointer (file);
+
   acquire_file_lock ();
+
+#ifdef VM
+  preset_pages (file, initial_size);
+#endif
+
   f->eax = filesys_create (file, initial_size);
+
+#ifdef VM
+  unpin_preset_pages (file, initial_size);
+#endif  
+
   release_file_lock ();
 }
 
@@ -230,8 +250,20 @@ sys_remove (struct intr_frame *f)
 {
   const char *file = (const char *) get_argument (1, f);
   check_valid_pointer (file);
+  size_t size = sizeof (file);
+
   acquire_file_lock ();
+
+#ifdef VM
+  preset_pages (file, size);
+#endif
+
   f->eax = filesys_remove (file);
+
+#ifdef VM
+  unpin_preset_pages (file, size);
+#endif
+
   release_file_lock ();
 }
 
@@ -244,9 +276,17 @@ sys_open (struct intr_frame *f)
 {
   const char *file = (const char *) get_argument (1, f);
   check_valid_pointer (file);
+  size_t size = sizeof (file);
   acquire_file_lock ();
+
+#ifdef VM
+  preset_pages (file, size);
+#endif
   struct file *opened_file = filesys_open (file);
-  release_file_lock ();
+#ifdef VM
+  unpin_preset_pages (file, size);
+#endif
+
   if (opened_file == NULL) {
     f->eax = -1; /* Failed to open the file. */
   } else {
@@ -256,6 +296,7 @@ sys_open (struct intr_frame *f)
     list_push_back (&thread_current ()->file_list, &pf->file_elem);
     f->eax = pf->fd; /* Return the file descriptor. */
   }
+  release_file_lock ();
 }
 
 
@@ -265,14 +306,16 @@ sys_filesize (struct intr_frame *f)
 {
   int fd = get_argument (1, f);
   struct process_file *pf;
+  acquire_file_lock ();
+
   pf = get_process_file (fd);
   if (pf == NULL) {
     f->eax = -1; /* File not found. */
   } else {
-    acquire_file_lock ();
     f->eax = file_length (pf->file);
-    release_file_lock ();
   }
+
+  release_file_lock ();
 }
 
 
@@ -284,6 +327,8 @@ sys_read (struct intr_frame *f)
   void *buffer = (void *) get_argument (2, f);
   unsigned size = get_argument (3, f);
   check_valid_pointer (buffer);
+  acquire_file_lock ();
+
   if (fd == 0) {
     for (unsigned i = 0; i < size; i++) {
       ((uint8_t *) buffer)[i] = input_getc ();
@@ -294,17 +339,18 @@ sys_read (struct intr_frame *f)
     if (pf == NULL) {
       f->eax = -1; /* File not found. */
     } else {
+      
+
 #ifdef VM
       preset_pages (buffer, size);
 #endif
-      acquire_file_lock ();
       f->eax = file_read (pf->file, buffer, size);
-      release_file_lock ();
 #ifdef VM
       unpin_preset_pages (buffer, size);
 #endif
     }
   }
+  release_file_lock ();
 }
 
 /** System Call: int write (int fd, const void *buffer, unsigned size) */
@@ -315,6 +361,8 @@ sys_write (struct intr_frame *f)
   const char *buffer = (const char *) get_argument (2, f);
   check_valid_pointer (buffer);
   off_t size = get_argument (3, f);
+  acquire_file_lock ();
+
   if (fd == 1) {
     putbuf (buffer, size);
     f->eax = size;
@@ -323,17 +371,18 @@ sys_write (struct intr_frame *f)
     if (pf == NULL) {
       f->eax = -1; /* File not found. */
     } else {
+      
+
 #ifdef VM
       preset_pages (buffer, size);
 #endif
-      acquire_file_lock ();
       f->eax = file_write (pf->file, buffer, size);
-      release_file_lock ();
 #ifdef VM
       unpin_preset_pages (buffer, size);
 #endif
     }
   }
+  release_file_lock ();
 }
 
 
@@ -345,14 +394,14 @@ sys_seek (struct intr_frame *f)
 {
   int fd = get_argument (1, f);
   off_t position = get_argument (2, f);
+  acquire_file_lock ();
   struct process_file *pf = get_process_file (fd);
   if (pf == NULL) {
     f->eax = -1; /* File not found. */
   } else {
-    acquire_file_lock ();
     file_seek (pf->file, position);
-    release_file_lock ();
   }
+  release_file_lock ();
 }
 
 /** Tell System Call.  */
@@ -360,14 +409,14 @@ static void
 sys_tell (struct intr_frame *f) 
 {
   int fd = get_argument (1, f);
+  acquire_file_lock ();
   struct process_file *pf = get_process_file (fd);
   if (pf == NULL) {
     f->eax = -1; /* File not found. */
   } else {
-    acquire_file_lock ();
     f->eax = file_tell (pf->file);
-    release_file_lock ();
   }
+  release_file_lock ();
 }
 
 
@@ -376,16 +425,17 @@ static void
 sys_close (struct intr_frame *f) 
 {
   int fd = get_argument (1, f);
+  acquire_file_lock ();
   struct process_file *pf = get_process_file (fd);
   if (pf != NULL) {
-    acquire_file_lock ();
     file_close (pf->file);
-    release_file_lock ();
     list_remove (&pf->file_elem);
     free (pf);
   }
+  release_file_lock ();
 }
 
+#ifdef VM
 /** We must pin the page holding the resources. */
 void
 preset_pages (void *buffer, size_t size)
@@ -415,3 +465,4 @@ unpin_preset_pages (void *buffer, size_t size)
     user_page += PGSIZE;
   }
 }
+#endif

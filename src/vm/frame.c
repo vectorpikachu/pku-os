@@ -10,11 +10,7 @@
 #include "userprog/pagedir.h"
 
 
-/** A lock that tries to handle the syncronization problem in frame table.
-    
-    Actually the hash map is the frame table.
-    It is used to protect it.
- */
+/** A lock that tries to handle the synchronization problem in frame.c */
 static struct lock frame_lock;
 
 /** A hash map that: `frame_table: Physical Address -> Frame Table Entry`.
@@ -156,6 +152,7 @@ frame_alloc (enum palloc_flags flags, void *user_page)
 
   fte->rel_thread = thread_current ();
   fte->pinning = true; /* Don't evict this frame. */
+  fte->cnt = 0;
 
   /** Now insert this frame into the frame table. */
   hash_insert (&frame_table, &fte->frame_elem);
@@ -262,7 +259,9 @@ frame_free (void *frame)
   lock_release (&frame_lock);
 }
 
-/** Choose the frame to be evicted.  */
+/** Choose the frame to be evicted.
+    Clock Algo.
+  */
 struct frame_table_entry *
 frame_to_evict (uint32_t pagedir)
 {
@@ -285,10 +284,10 @@ frame_to_evict (uint32_t pagedir)
     }
     if (pagedir_is_accessed (pagedir, fte->user_page))
     {
-      /* N = 2. */
       pagedir_set_accessed (pagedir, fte->user_page, false);
       continue;
     }
+
     return fte;
   }
   return NULL;
