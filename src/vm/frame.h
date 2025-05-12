@@ -45,6 +45,8 @@ void frame_free (void *frame);
 
 void frame_free_without_lock (void *frame);
 
+void fte_remove (void *frame);
+
 void frame_pin (void *frame);
 void frame_unpin (void *frame);
 

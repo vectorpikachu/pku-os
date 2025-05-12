@@ -1,10 +1,12 @@
 #include "lib/kernel/hash.h"
 #include "vm/page.h"
 #include "vm/frame.h"
+#include "vm/swap.h"
 #include "userprog/pagedir.h"
 #include "threads/palloc.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
+#include <string.h>
 
 
 /** Helper functions of creating a supplemental page table.
@@ -41,6 +43,20 @@ sup_action_func (struct hash_elem *elem, void *aux)
 {
   struct sup_page_table_entry *sup_pte = 
     hash_entry (elem, struct sup_page_table_entry, sup_elem);
+  /* We should not only free the SPTE, 
+     but the frame and swap index too. */
+  if (sup_pte->frame != NULL)
+  {
+    ASSERT (sup_pte->status == ON_FRAME);
+    /* Here we free the user page.
+       So don't palloc_free the frame.
+       But simpy remove it from the frame table. */
+    /* As the code in `process_exit ()` will free all pages. */
+    fte_remove (sup_pte->frame);
+  } else if (sup_pte->status == SWAP_SLOT)
+  {
+    swap_free (sup_pte->st_index);
+  }
   free (sup_pte);
 }
 
@@ -244,6 +260,7 @@ sup_page_table_set_page (struct sup_page_table *sup_pt,
         frame_free (frame); /* Release the resources before terminating. */
         return false;
       }
+      ASSERT (sup_pte->read_bytes + sup_pte->zero_bytes == PGSIZE);
      
       memset (frame + read_bytes, 0, sup_pte->zero_bytes);
       writable = sup_pte->writable;

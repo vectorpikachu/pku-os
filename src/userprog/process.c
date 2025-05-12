@@ -247,6 +247,12 @@ process_exit (void)
   uint32_t *pd;
 
   printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
+
+#ifdef VM
+  sup_page_table_destroy (cur->sup_pt);
+  cur->sup_pt = NULL;
+#endif
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -263,10 +269,6 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-#ifdef VM
-    sup_page_table_destroy (cur->sup_pt);
-    cur->sup_pt = NULL;
-#endif
 }
 
 /** Sets up the CPU for running user code in the current

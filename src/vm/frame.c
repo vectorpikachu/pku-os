@@ -113,6 +113,12 @@ frame_alloc (enum palloc_flags flags, void *user_page)
                                    frame_evict->user_page)
               || pagedir_is_dirty (frame_evict->rel_thread->pagedir,
                                    frame_evict->frame);
+    
+    /* It's a I/O for swap out. */
+    frame_evict->pinning = true;
+
+    lock_release (&frame_lock);
+
     /* Swap this evicted page out. */
     uint32_t st_index = swap_out (frame_evict->frame);
     if (st_index == (uint32_t)-1)
@@ -120,6 +126,9 @@ frame_alloc (enum palloc_flags flags, void *user_page)
       PANIC ("swap full - cannot evict frame %p for user page %p\n",
             frame_evict->frame, frame_evict->user_page);
     }
+
+    lock_acquire (&frame_lock);
+
     sup_page_table_set_page_swap (frame_evict->rel_thread->sup_pt,
                                   frame_evict->user_page,
                                   st_index);
@@ -152,6 +161,7 @@ frame_alloc (enum palloc_flags flags, void *user_page)
   fte->frame = frame;
 
   fte->rel_thread = thread_current ();
+  fte->pinning = true; /* Don't evict this frame. */
 
   /** Now insert this frame into the frame table. */
   hash_insert (&frame_table, &fte->frame_elem);
@@ -169,6 +179,8 @@ frame_free_without_lock (void *frame)
       Which means: the offset must be 0.
    */
   ASSERT (pg_ofs (frame) == 0);
+  ASSERT (lock_held_by_current_thread (&frame_lock));
+  ASSERT (is_kernel_vaddr (frame));
 
   /** By storing the address of the frame in an entry
       we can use `hash_find` to find the actual entry.
@@ -186,7 +198,10 @@ frame_free_without_lock (void *frame)
 
   /** Do not find the entry. */
   if (find_elem == NULL)
-    return;
+  {
+    /* Should directly panic OS. But not return. */
+    PANIC ("Cannot find the frame.");
+  }
   
   fte = hash_entry (find_elem, struct frame_table_entry, frame_elem);
 
@@ -197,6 +212,51 @@ frame_free_without_lock (void *frame)
   
   palloc_free_page (fte->frame);
   free(fte);
+}
+
+
+/** Just remove this fte from frame table. See process_exit. */
+void
+fte_remove (void *frame)
+{
+  lock_acquire (&frame_lock);
+  /** Check the validity of a given frame.
+      page-aligned: start on a virtual address evenly divisible by the page size.
+      Which means: the offset must be 0.
+   */
+  ASSERT (pg_ofs (frame) == 0);
+  ASSERT (lock_held_by_current_thread (&frame_lock));
+  ASSERT (is_kernel_vaddr (frame));
+
+  /** By storing the address of the frame in an entry
+      we can use `hash_find` to find the actual entry.
+   */
+  size_t fte_size = sizeof (struct frame_table_entry);
+  struct frame_table_entry *fte;
+  fte = (struct frame_table_entry *)malloc (fte_size);
+  if (fte == NULL)
+    return;
+  
+  fte->frame = frame;
+
+  struct hash_elem *find_elem = hash_find (&frame_table, &fte->frame_elem);
+  free (fte);
+
+  /** Do not find the entry. */
+  if (find_elem == NULL)
+  {
+    /* Should directly panic OS. But not return. */
+    PANIC ("Cannot find the frame.");
+  }
+  
+  fte = hash_entry (find_elem, struct frame_table_entry, frame_elem);
+
+  /** Now delete this frame from the frame table. */
+  
+  hash_delete (&frame_table, &fte->frame_elem);
+  list_remove (&fte->fl_elem);
+  free(fte);
+  lock_release (&frame_lock);
 }
 
 /** Free a frame. */
@@ -254,7 +314,7 @@ frame_pin (void *frame)
   if (find_elem == NULL)
   {
     free (fte);
-    return;
+    PANIC ("Cannot find the frame.");
   }
   
   free (fte);
@@ -278,7 +338,7 @@ frame_unpin (void *frame)
   if (find_elem == NULL)
   {
     free (fte);
-    return;
+    PANIC ("Cannot find the frame.");
   }
   
   free (fte);

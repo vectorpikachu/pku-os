@@ -172,6 +172,7 @@ page_fault (struct intr_frame *f)
   page_fault_depth++;
   if (page_fault_depth > MAX_FAULT_DEPTH)
   {
+    page_fault_depth--;
     f->eip = (void (*) (void)) f->eax;
     f->eax = -1;
     return;
@@ -188,6 +189,7 @@ page_fault (struct intr_frame *f)
   if (!not_present || !fault_addr || !is_user_vaddr (fault_addr))
   {
     /* Try to violate. */
+    page_fault_depth--;
     terminate_process (fault_addr, not_present, write, user, f); 
   }
   /* Locate the page that faulted in the supplemental page table. */
@@ -195,7 +197,10 @@ page_fault (struct intr_frame *f)
   void *fault_page = (void *) pg_round_down (fault_addr);
 
   if (!sup_page_table_set_page (cur->sup_pt, cur->pagedir, fault_page))
-    terminate_process (fault_addr, not_present, write, user, f);  
+  {
+   page_fault_depth--;
+   terminate_process (fault_addr, not_present, write, user, f); 
+  }
   
   page_fault_depth--;
 #else
