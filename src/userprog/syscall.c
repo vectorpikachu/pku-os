@@ -32,6 +32,7 @@ struct process_file *get_process_file (int fd);
 #ifdef VM
 void preset_pages (void *buffer, size_t size);
 void unpin_preset_pages (void *buffer, size_t size);
+void preset_and_check_pages (void *buffer, size_t size);
 #endif
 
 static void syscall_handler (struct intr_frame *);
@@ -443,6 +444,25 @@ preset_pages (void *buffer, size_t size)
   struct sup_page_tabe *sup_pt = thread_current ()->sup_pt;
   uint32_t *pagedir = thread_current ()->pagedir;
   void *user_page = pg_round_down (buffer);
+  while (user_page <= buffer + size)
+  {
+    sup_page_table_set_page (sup_pt, pagedir, user_page);
+    page_pin (sup_pt, user_page);
+    user_page += PGSIZE;
+  }
+}
+
+/** This does not work. */
+void
+preset_and_check_pages (void *buffer, size_t size)
+{
+  struct sup_page_tabe *sup_pt = thread_current ()->sup_pt;
+  uint32_t *pagedir = thread_current ()->pagedir;
+  void *user_page = pg_round_down (buffer);
+  struct sup_page_table_entry *sup_pte = 
+    sup_page_table_find (sup_pt, user_page);
+  if (!sup_pte->writable)
+    exit_err ();
   while (user_page <= buffer + size)
   {
     sup_page_table_set_page (sup_pt, pagedir, user_page);

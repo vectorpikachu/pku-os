@@ -65,7 +65,7 @@ frame_less_func (const struct hash_elem *a,
 }
 
 struct frame_table_entry *
-frame_to_evict (uint32_t pagedir);
+frame_to_evict (uint32_t *pagedir);
 
 /** Initialize the lock and the hash map here. */
 void
@@ -263,7 +263,7 @@ frame_free (void *frame)
     Clock Algo.
   */
 struct frame_table_entry *
-frame_to_evict (uint32_t pagedir)
+frame_to_evict (uint32_t *pagedir)
 {
   size_t size = list_size (&frame_list);
 
