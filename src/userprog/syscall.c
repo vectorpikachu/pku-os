@@ -118,8 +118,7 @@ check_valid_pointer (const void *vaddr)
   if (!is_user_vaddr (vaddr))
     exit_err ();
   
-  if (pagedir_get_page (thread_current ()->pagedir, vaddr) == NULL)
-    exit_err ();
+  /* Don't exit now! Let it be a page fault. */
   
   /* Check sc-boundary-3:
      Invokes a system call with the system call number positioned
@@ -169,9 +168,13 @@ void exit (int status)
 }
 
 static void
-syscall_handler (struct intr_frame *f UNUSED) 
+syscall_handler (struct intr_frame *f) 
 {
   int syscall_num = get_argument (0, f);
+#ifdef USERPROG
+  /* Store the esp on the transition from user mode to kernel mode */
+  thread_current ()->esp = f->esp;
+#endif
   syscalls[syscall_num] (f);
 }
 

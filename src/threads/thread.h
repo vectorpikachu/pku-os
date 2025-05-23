@@ -156,6 +156,9 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /**< Page directory. */
+
+    uint8_t *esp;                       /**< saving esp into struct thread on the initial
+                                             transition from user to kernel mode. */
 #endif
 #ifdef VM
     struct sup_page_table *sup_pt;      /** Supplemental page table. */

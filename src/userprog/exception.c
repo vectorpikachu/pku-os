@@ -22,6 +22,7 @@
 #include "vm/swap.h"
 static long long page_fault_depth;
 #define MAX_FAULT_DEPTH 4
+#define MAX_STACK_SIZE 0x800000   /**< the default stack limit is 8 MB. */
 #endif
 
 /** Number of page faults processed. */
@@ -186,7 +187,7 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  if (!not_present || !fault_addr)
+  if (!not_present)
   {
     /* Try to violate. */
 #ifdef VM
@@ -211,11 +212,34 @@ page_fault (struct intr_frame *f)
   struct thread *cur = thread_current ();
   void *fault_page = (void *) pg_round_down (fault_addr);
 
+  /* You will need to be able to obtain the current value 
+     of the user program's stack pointer.  */
+  void *esp = user ? f->esp : cur->esp;
+
+  /* Is stack in user memory? 
+     PHYS_BASE - MAX_STACK_SIZE <= fault_addr && fault_addr < PHYS_BASE
+     PUSH may cause a page fault 4 bytes below the stack pointer.
+     PUSHA instruction pushes 32 bytes at once, 
+     so it can fault 32 bytes below the stack pointer. */
+  bool is_stack_access = (PHYS_BASE - MAX_STACK_SIZE <= fault_addr 
+                          && fault_addr < PHYS_BASE)
+                      && (esp <= fault_addr 
+                          || fault_addr == f->esp - 4
+                          || fault_addr == f->esp - 32);
+  if (is_stack_access) {
+    /* if the stack grows past its current size,
+       allocate additional pages as necessary.
+       The simplest way is to allocate a zero-filled page. */
+    if (!sup_page_table_find (cur->sup_pt, fault_page)) {
+      sup_page_table_set_page_zero (cur->sup_pt, fault_page);
+    }
+  }
+
   if (!sup_page_table_set_page (cur->sup_pt, cur->pagedir, fault_page))
   {
-   page_fault_depth--;
-   terminate_process (fault_addr, not_present, write, user, f);
-   return;
+    page_fault_depth--;
+    terminate_process (fault_addr, not_present, write, user, f);
+    return;
   }
   
   page_fault_depth--;
