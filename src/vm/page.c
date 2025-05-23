@@ -345,7 +345,7 @@ sup_page_table_unmap (struct sup_page_table *sup_pt,
   sup_pte = sup_page_table_find (sup_pt, user_page);
 
   if (sup_pte == NULL) {
-    PANIC ("UNMAP FAILED!");
+    return;
   }
 
   if (sup_pte->status == ON_FRAME) {

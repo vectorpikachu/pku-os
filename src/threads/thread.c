@@ -17,6 +17,9 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
+#ifdef VM
+#include "userprog/syscall.h"
+#endif
 
 /** Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -345,44 +348,14 @@ thread_exit (void)
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
-  intr_disable ();
 
-  /* Lab 2: Thread_exit is now actually exiting process. */
-  thread_current ()->child->exit_status = thread_current ()->exit_status;
-  sema_up (&thread_current ()->child->sema);
-
-  file_close (thread_current ()->file_exec);
-
-  /* Close all opened files. */
-  struct list *file_list = &thread_current ()->file_list;
   struct list_elem *e;
-  
-  for (e = list_begin (file_list); e != list_end (file_list); 
-       e = list_remove (e)) {
-    struct process_file *pf = list_entry (e, struct process_file, file_elem);
-    file_close (pf->file);
-    free (pf);
+  struct list *locks = &thread_current ()->locks;
+  for (e = list_begin (locks); e != list_end (locks); e = list_next (e)) {
+    struct lock *lock = list_entry (e, struct lock, lock_elem);
+    lock_release(lock);
   }
-  
-  struct list *children = &thread_current ()->children;
-  /* Free all child_process entries we allocated (if we're the parent). */
-  while (!list_empty (children)) {
-    e = list_pop_front (children);
-    struct child_process *cp = list_entry (e, struct child_process, child_elem);
-    free (cp);
-  }
-
-#ifdef VM
-  struct list *map_list = &thread_current ()->map_list;
-  while (!list_empty (map_list)) {
-    e = list_pop_front (map_list);
-    struct process_map *proc_map = list_entry (e, struct process_map, elem);
-    /* Explicitly Unmap this. */
-
-    ASSERT (munmap (proc_map->map_id) == true);
-  }
-#endif
-
+  intr_disable ();
   list_remove (&thread_current ()->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();

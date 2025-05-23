@@ -17,7 +17,7 @@ typedef int mapid_t; /* Set mapid_t. */
 
 /** This is to track which files are mapped into which pages. */
 struct process_map {
-    mapid_t map_id;         /**< The mapping id. */
+    mapid_t map_id;          /**< The mapping id. */
     struct list_elem elem;   /**< Form a list in process. */
     struct file *file;       /**< The mapped file. */ 
     void *addr;              /**< The address that is mapping to. */

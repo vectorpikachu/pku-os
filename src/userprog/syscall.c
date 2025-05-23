@@ -33,7 +33,7 @@ struct process_file *get_process_file (int fd);
 void preset_pages (void *buffer, size_t size);
 void unpin_preset_pages (void *buffer, size_t size);
 void preset_and_check_pages (void *buffer, size_t size);
-struct process_map *get_process_map (mapid_t id);
+struct process_map *get_process_map (struct thread *cur, mapid_t id);
 bool munmap (mapid_t map_id);
 #endif
 
@@ -89,11 +89,11 @@ get_process_file (int fd)
 #ifdef VM
 /** Find the process map struct with the given map id. */
 struct process_map *
-get_process_map (mapid_t id)
+get_process_map (struct thread *cur, mapid_t id)
 {
   struct list_elem *e;
   struct process_map *pm = NULL;
-  struct list *map_list = &thread_current ()->map_list;
+  struct list *map_list = &cur->map_list;
 
   for (e = list_begin (map_list); e != list_end (map_list);
        e = list_next (e)) {
@@ -490,6 +490,11 @@ sys_mmap (struct intr_frame *f)
     return;
   }
 
+  if (addr == 0) {
+    f->eax = -1;
+    return;
+  }
+
   struct thread *cur = thread_current ();
 
   acquire_file_lock ();
@@ -580,7 +585,7 @@ sys_munmap (struct intr_frame *f)
 {
   mapid_t map_id = get_argument (1, f);
   struct thread *cur = thread_current ();
-  struct process_map *proc_map = get_process_map (map_id);
+  struct process_map *proc_map = get_process_map (cur, map_id);
 
   if (proc_map == NULL) {
     f->eax = -1;
@@ -616,7 +621,7 @@ bool
 munmap (mapid_t map_id)
 {
   struct thread *cur = thread_current ();
-  struct process_map *proc_map = get_process_map (map_id);
+  struct process_map *proc_map = get_process_map (cur, map_id);
 
   if (proc_map == NULL) {
     return false;

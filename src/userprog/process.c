@@ -248,6 +248,43 @@ process_exit (void)
 
   printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
 
+  /* Lab 2: Thread_exit is now actually exiting process. */
+  thread_current ()->child->exit_status = thread_current ()->exit_status;
+  sema_up (&thread_current ()->child->sema);
+
+  file_close (thread_current ()->file_exec);
+
+  /* Close all opened files. */
+  struct list *file_list = &thread_current ()->file_list;
+  struct list_elem *e;
+
+#ifdef VM
+  struct list *map_list = &thread_current ()->map_list;
+  while (!list_empty (map_list)) {
+    e = list_begin (map_list); /* Be trapped in `list_pop_front`! */
+    struct process_map *proc_map = list_entry (e, struct process_map, elem);
+    /* Explicitly Unmap this. */
+
+    bool success = munmap (proc_map->map_id);
+  }
+#endif 
+
+  for (e = list_begin (file_list); e != list_end (file_list); 
+       e = list_remove (e)) {
+    struct process_file *pf = list_entry (e, struct process_file, file_elem);
+    file_close (pf->file);
+    free (pf);
+  }
+  
+  struct list *children = &thread_current ()->children;
+  /* Free all child_process entries we allocated (if we're the parent). */
+  while (!list_empty (children)) {
+    e = list_pop_front (children);
+    struct child_process *cp = list_entry (e, struct child_process, child_elem);
+    free (cp);
+  }
+
+
 #ifdef VM
   sup_page_table_destroy (cur->sup_pt);
   cur->sup_pt = NULL;
