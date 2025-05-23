@@ -372,6 +372,17 @@ thread_exit (void)
     free (cp);
   }
 
+#ifdef VM
+  struct list *map_list = &thread_current ()->map_list;
+  while (!list_empty (map_list)) {
+    e = list_pop_front (map_list);
+    struct process_map *proc_map = list_entry (e, struct process_map, elem);
+    /* Explicitly Unmap this. */
+
+    ASSERT (munmap (proc_map->map_id) == true);
+  }
+#endif
+
   list_remove (&thread_current ()->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
@@ -697,6 +708,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->original_priority = priority;
   t->nice = 0; // initial thread, nice value is 0
   t->recent_cpu = 0;
+#ifdef VM
+  /* Initialize the map list. */
+  list_init (&t->map_list);
+#endif
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

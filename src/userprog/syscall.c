@@ -25,7 +25,7 @@ static void (*syscalls[SYSCALL_NUM])(struct intr_frame *);
 int32_t get_argument (int arg_index, struct intr_frame *f);
 static int get_user (const uint8_t *uaddr);
 static bool put_user (uint8_t *udst, uint8_t byte);
-void check_valid_pointer (const void *vaddr);
+void check_valid_pointer (const void *vaddr, size_t size);
 void exit_err (void);
 struct process_file *get_process_file (int fd);
 
@@ -33,6 +33,8 @@ struct process_file *get_process_file (int fd);
 void preset_pages (void *buffer, size_t size);
 void unpin_preset_pages (void *buffer, size_t size);
 void preset_and_check_pages (void *buffer, size_t size);
+struct process_map *get_process_map (mapid_t id);
+bool munmap (mapid_t map_id);
 #endif
 
 static void syscall_handler (struct intr_frame *);
@@ -49,6 +51,10 @@ static void sys_write (struct intr_frame *);
 static void sys_seek (struct intr_frame *);
 static void sys_tell (struct intr_frame *);
 static void sys_close (struct intr_frame *);
+#ifdef VM
+static void sys_mmap (struct intr_frame *);
+static void sys_munmap (struct intr_frame *);
+#endif
 
 
 /** Get the argument at the index arg_index. */
@@ -57,7 +63,7 @@ get_argument (int arg_index, struct intr_frame *f)
 {
   int32_t *arg_ptr;
   arg_ptr = (int32_t *) (f->esp + arg_index * sizeof (int32_t));
-  check_valid_pointer (arg_ptr);
+  check_valid_pointer (arg_ptr, sizeof (arg_ptr));
   return *arg_ptr;
 }
 
@@ -79,6 +85,25 @@ get_process_file (int fd)
   }
   return NULL;
 }
+
+#ifdef VM
+/** Find the process map struct with the given map id. */
+struct process_map *
+get_process_map (mapid_t id)
+{
+  struct list_elem *e;
+  struct process_map *pm = NULL;
+  struct list *map_list = &thread_current ()->map_list;
+
+  for (e = list_begin (map_list); e != list_end (map_list);
+       e = list_next (e)) {
+    pm = list_entry (e, struct process_map, elem);
+    if (pm->map_id == id)
+      return pm;
+  }
+  return NULL;
+}
+#endif
 
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
@@ -111,21 +136,21 @@ put_user (uint8_t *udst, uint8_t byte)
     3. A pointer to kernel virtual address space (above PHYS_BASE).
  */
 void
-check_valid_pointer (const void *vaddr)
+check_valid_pointer (const void *vaddr, size_t size)
 {
   if (vaddr == NULL)
     exit_err ();
   if (!is_user_vaddr (vaddr))
     exit_err ();
   
-  /* Don't exit now! Let it be a page fault. */
+  /* Don't exit now! Let it be a page fault. pt-growth-stk-sc. */
   
   /* Check sc-boundary-3:
      Invokes a system call with the system call number positioned
      such that its first byte is valid but the remaining bytes of
      the number are in invalid memory. Must kill process.
    */
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < size; i++) {
     if (get_user ((const uint8_t *) vaddr + i) == -1)
       exit_err ();
   }
@@ -157,6 +182,10 @@ syscall_init (void)
   syscalls[SYS_SEEK] = &sys_seek;
   syscalls[SYS_TELL] = &sys_tell;
   syscalls[SYS_CLOSE] = &sys_close;
+#ifdef VM
+  syscalls[SYS_MMAP] = &sys_mmap;
+  syscalls[SYS_MUNMAP] = &sys_munmap;
+#endif
 }
 
 
@@ -203,8 +232,8 @@ static void
 sys_exec (struct intr_frame *f) 
 {
   const char *cmd_line = (const char *) get_argument (1, f);
-  check_valid_pointer (cmd_line);
   size_t size = sizeof (cmd_line);
+  check_valid_pointer (cmd_line, size);
 #ifdef VM
   preset_pages (cmd_line, size);
 #endif
@@ -231,7 +260,7 @@ sys_create (struct intr_frame *f)
 {
   const char *file = (const char *) get_argument (1, f);
   unsigned initial_size = get_argument (2, f);
-  check_valid_pointer (file);
+  check_valid_pointer (file, sizeof (file));
 
   acquire_file_lock ();
 
@@ -253,9 +282,9 @@ static void
 sys_remove (struct intr_frame *f) 
 {
   const char *file = (const char *) get_argument (1, f);
-  check_valid_pointer (file);
   size_t size = sizeof (file);
-
+  check_valid_pointer (file, size);
+  
   acquire_file_lock ();
 
 #ifdef VM
@@ -279,8 +308,8 @@ static void
 sys_open (struct intr_frame *f) 
 {
   const char *file = (const char *) get_argument (1, f);
-  check_valid_pointer (file);
   size_t size = sizeof (file);
+  check_valid_pointer (file, size);
   acquire_file_lock ();
 
 #ifdef VM
@@ -330,7 +359,7 @@ sys_read (struct intr_frame *f)
   int fd = get_argument (1, f);
   void *buffer = (void *) get_argument (2, f);
   unsigned size = get_argument (3, f);
-  check_valid_pointer (buffer);
+  check_valid_pointer (buffer, sizeof (buffer));
   acquire_file_lock ();
 
   if (fd == 0) {
@@ -363,7 +392,7 @@ sys_write (struct intr_frame *f)
 {
   int fd = get_argument (1, f);
   const char *buffer = (const char *) get_argument (2, f);
-  check_valid_pointer (buffer);
+  check_valid_pointer (buffer, sizeof (buffer));
   off_t size = get_argument (3, f);
   acquire_file_lock ();
 
@@ -438,6 +467,185 @@ sys_close (struct intr_frame *f)
   }
   release_file_lock ();
 }
+
+#ifdef VM
+/** Mmap 
+    mapid_t mmap (int fd, void *addr)
+    Maps the file open as fd into the process's virtual address space. */
+static void
+sys_mmap (struct intr_frame *f)
+{
+  int fd = get_argument (1, f);
+  void *addr = get_argument (2, f);
+  /* file descriptors 0 and 1, representing console input and output, 
+     are not mappable. */
+  if (fd <= 1) {
+    f->eax = -1;
+    return;
+  }
+
+  if (pg_ofs (addr) != 0) {
+    /* It must fail if addr is not page-aligned */
+    f->eax = -1;
+    return;
+  }
+
+  struct thread *cur = thread_current ();
+
+  acquire_file_lock ();
+
+  /* Reopen the file `fd', as it is already opened. */
+  struct file *file = NULL;
+  struct process_file *pf = get_process_file (fd);
+  if (pf && pf->file) {
+    file = file_reopen (pf->file);
+  }
+  if (file == NULL) {
+    /* This file not exists. */
+    release_file_lock ();
+    f->eax = -1;
+    return;
+  }
+
+  size_t file_size = file_length (file);
+  if (file_size == 0) {
+    /* A call to mmap may fail if the file open 
+       as fd has a length of zero bytes. */
+    release_file_lock ();
+    f->eax = -1;
+    return;
+  }
+
+  /* Map the memory. */
+  /* The entire file is mapped into consecutive 
+     virtual pages starting at addr. */
+  off_t cur_ofs;
+  cur_ofs = 0;
+  while (cur_ofs < file_size) {
+    /* It must fail if the range of pages mapped 
+       overlaps any existing set of mapped pages */
+    void *cur_addr = addr + cur_ofs;
+    if (sup_page_table_find (cur->sup_pt, cur_addr) != NULL) {
+      release_file_lock ();
+      f->eax = -1;
+      return;
+    }
+    cur_ofs += PGSIZE;
+  }
+
+  /* Map the file to memory. */
+  cur_ofs = 0;
+  while (cur_ofs < file_size) {
+    /* It must fail if the range of pages mapped 
+       overlaps any existing set of mapped pages */
+    void *cur_addr = addr + cur_ofs;
+    size_t page_read_bytes = cur_ofs + PGSIZE < file_size ? PGSIZE : file_size - cur_ofs;
+    size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+    sup_page_table_set_page_file (cur->sup_pt, 
+                                  cur_addr, 
+                                  file, 
+                                  cur_ofs, 
+                                  page_read_bytes, 
+                                  page_zero_bytes, 
+                                  true);
+    
+    cur_ofs += PGSIZE;
+  }
+
+  /* Get the mapid_t id. */
+  mapid_t map_id;
+  struct list *map_list = &cur->map_list;
+  if (!list_empty (map_list)) {
+    map_id = list_entry (list_back (map_list), struct process_map, elem)->map_id + 1;
+  } else 
+    map_id = 1;
+  
+  struct process_map *proc_map = (struct process_map *) 
+    malloc (sizeof (struct process_map));
+  proc_map->map_id = map_id;
+  proc_map->file = file;
+  proc_map->addr = addr;
+  proc_map->size = file_size;
+  list_push_back (map_list, &proc_map->elem);
+  
+  release_file_lock ();
+  f->eax = map_id;
+}
+
+
+/** void munmap (mapid_t mapping). */
+static void
+sys_munmap (struct intr_frame *f)
+{
+  mapid_t map_id = get_argument (1, f);
+  struct thread *cur = thread_current ();
+  struct process_map *proc_map = get_process_map (map_id);
+
+  if (proc_map == NULL) {
+    f->eax = -1;
+    return;
+  }
+
+  acquire_file_lock ();
+  off_t cur_ofs;
+  cur_ofs = 0;
+  size_t file_size = proc_map->size;
+  while (cur_ofs < file_size) {
+    /* It must fail if the range of pages mapped 
+       overlaps any existing set of mapped pages */
+    void *cur_addr = proc_map->addr + cur_ofs;
+    size_t cur_bytes = cur_ofs + PGSIZE < file_size ? PGSIZE : file_size - cur_ofs;
+
+    sup_page_table_unmap (cur->sup_pt, cur->pagedir, cur_addr, 
+                          proc_map->file, cur_ofs, cur_bytes);
+
+    list_remove (&proc_map->elem);
+    file_close (proc_map->file);
+    free (proc_map);
+
+    cur_ofs += PGSIZE;
+  }
+
+  release_file_lock ();
+}
+
+
+/** Explicitly unmap the mapping. */
+bool
+munmap (mapid_t map_id)
+{
+  struct thread *cur = thread_current ();
+  struct process_map *proc_map = get_process_map (map_id);
+
+  if (proc_map == NULL) {
+    return false;
+  }
+
+  acquire_file_lock ();
+  off_t cur_ofs;
+  cur_ofs = 0;
+  size_t file_size = proc_map->size;
+  while (cur_ofs < file_size) {
+    /* It must fail if the range of pages mapped 
+       overlaps any existing set of mapped pages */
+    void *cur_addr = proc_map->addr + cur_ofs;
+    size_t cur_bytes = cur_ofs + PGSIZE < file_size ? PGSIZE : file_size - cur_ofs;
+
+    sup_page_table_unmap (cur->sup_pt, cur->pagedir, cur_addr, 
+                          proc_map->file, cur_ofs, cur_bytes);
+
+    list_remove (&proc_map->elem);
+    file_close (proc_map->file);
+    free (proc_map);
+
+    cur_ofs += PGSIZE;
+  }
+
+  release_file_lock ();
+  return true;
+}
+#endif
 
 #ifdef VM
 /** We must pin the page holding the resources. */

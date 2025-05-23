@@ -157,11 +157,12 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /**< Page directory. */
 
-    uint8_t *esp;                       /**< saving esp into struct thread on the initial
+    uint8_t *esp;                       /**< Saving esp into struct thread on the initial
                                              transition from user to kernel mode. */
 #endif
 #ifdef VM
-    struct sup_page_table *sup_pt;      /** Supplemental page table. */
+    struct sup_page_table *sup_pt;      /**< Supplemental page table. */
+    struct list map_list;               /**< List of file-to-memory maps. */
 #endif
 
     /* Owned by thread.c. */

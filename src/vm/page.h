@@ -125,4 +125,9 @@ page_pin (struct sup_page_table *sup_pt, void *page);
 void
 page_unpin (struct sup_page_table *sup_pt, void *page);
 
+void
+sup_page_table_unmap (struct sup_page_table *sup_pt,
+                      uint32_t *pagedir, void *user_page,
+                      struct file *file, off_t ofs, uint32_t bytes);
+
 #endif

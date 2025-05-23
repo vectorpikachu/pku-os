@@ -334,3 +334,59 @@ page_unpin (struct sup_page_table *sup_pt, void *page)
     frame_unpin (sup_pte->frame);
   }
 }
+
+/** Unmap. Should by written back to file. */
+void
+sup_page_table_unmap (struct sup_page_table *sup_pt,
+                      uint32_t *pagedir, void *user_page,
+                      struct file *file, off_t ofs, uint32_t bytes)
+{
+  struct sup_page_table_entry *sup_pte;
+  sup_pte = sup_page_table_find (sup_pt, user_page);
+
+  if (sup_pte == NULL) {
+    PANIC ("UNMAP FAILED!");
+  }
+
+  if (sup_pte->status == ON_FRAME) {
+    frame_pin (sup_pte->frame);
+  }
+
+  bool dirty;
+
+  switch (sup_pte->status)
+  {
+  case ON_FRAME:
+    dirty = sup_pte->dirty;
+    dirty = dirty || pagedir_is_dirty (pagedir, sup_pte->user_page);
+    dirty = dirty || pagedir_is_dirty (pagedir, sup_pte->frame);
+
+    if (dirty) {
+      file_write_at (file, sup_pte->user_page, bytes, ofs);
+    }
+    frame_free (sup_pte->frame);
+    pagedir_clear_page (pagedir, sup_pte->user_page);
+    break;
+  
+  case SWAP_SLOT:
+    dirty = sup_pte->dirty;
+    dirty = dirty || pagedir_is_dirty (pagedir, sup_pte->user_page);
+    if (dirty) {
+      /* Swap in from swap. write it back to file. */
+      void *new_page = palloc_get_page (0);
+      swap_in (sup_pte->st_index, new_page);
+      file_write_at (file, new_page, PGSIZE, ofs);
+      palloc_free_page (new_page);
+    } else {
+      swap_free (sup_pte->st_index);
+    }
+    break;
+
+  case FILE_SYS:
+    break;
+  default:
+    PANIC ("Unreachable.");
+  }
+
+  hash_delete (&sup_pt->page_map, &sup_pte->sup_elem);
+}
