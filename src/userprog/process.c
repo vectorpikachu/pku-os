@@ -269,12 +269,12 @@ process_exit (void)
   }
 #endif 
 
-  for (e = list_begin (file_list); e != list_end (file_list); 
-       e = list_remove (e)) {
+  while (!list_empty (file_list)) {
+    e = list_pop_front (file_list);
     struct process_file *pf = list_entry (e, struct process_file, file_elem);
     file_close (pf->file);
     free (pf);
-  }
+  } 
   
   struct list *children = &thread_current ()->children;
   /* Free all child_process entries we allocated (if we're the parent). */

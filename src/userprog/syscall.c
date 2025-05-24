@@ -604,13 +604,12 @@ sys_munmap (struct intr_frame *f)
 
     sup_page_table_unmap (cur->sup_pt, cur->pagedir, cur_addr, 
                           proc_map->file, cur_ofs, cur_bytes);
-
-    list_remove (&proc_map->elem);
-    file_close (proc_map->file);
-    free (proc_map);
-
     cur_ofs += PGSIZE;
   }
+
+  list_remove (&proc_map->elem);
+  file_close (proc_map->file);
+  free (proc_map);
 
   release_file_lock ();
 }
@@ -620,6 +619,7 @@ sys_munmap (struct intr_frame *f)
 bool
 munmap (mapid_t map_id)
 {
+  // TODO! page-merge-mm will wait here?
   struct thread *cur = thread_current ();
   struct process_map *proc_map = get_process_map (cur, map_id);
 
@@ -640,12 +640,11 @@ munmap (mapid_t map_id)
     sup_page_table_unmap (cur->sup_pt, cur->pagedir, cur_addr, 
                           proc_map->file, cur_ofs, cur_bytes);
 
-    list_remove (&proc_map->elem);
-    file_close (proc_map->file);
-    free (proc_map);
-
     cur_ofs += PGSIZE;
   }
+  list_remove (&proc_map->elem);
+  file_close (proc_map->file);
+  free (proc_map);
 
   release_file_lock ();
   return true;
