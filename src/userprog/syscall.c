@@ -619,7 +619,6 @@ sys_munmap (struct intr_frame *f)
 bool
 munmap (mapid_t map_id)
 {
-  // TODO! page-merge-mm will wait here?
   struct thread *cur = thread_current ();
   struct process_map *proc_map = get_process_map (cur, map_id);
 

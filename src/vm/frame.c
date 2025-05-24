@@ -190,8 +190,7 @@ frame_free_without_lock (void *frame)
   /** Do not find the entry. */
   if (find_elem == NULL)
   {
-    /* Should directly panic OS. But not return. */
-    PANIC ("Cannot find the frame.");
+    return;
   }
   
   fte = hash_entry (find_elem, struct frame_table_entry, frame_elem);
